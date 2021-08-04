@@ -61,8 +61,8 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Documenter: doctest
-            using MyAwesomePackage     # change MyAwesomePackage to the name of your package
-            doctest(MyAwesomePackage)' # change MyAwesomePackage to the name of your package
+            using SupplyChainOptimization     
+            doctest(SupplyChainOptimization)' 
       - run: julia --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
