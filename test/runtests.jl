@@ -1,197 +1,196 @@
 using Base: product
 using SupplyChainOptimization
 #using Cbc
-import HiGHS
 using JuMP
 using MathOptInterface
 using Test
+
+include("UFLlib.jl")
 
 Seattle = Location(47.608013, -122.335167)
 
 function create_empty_model()
     sc = SupplyChain()
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m
+    return sc
 end
 
 function create_test_model()
     sc = SupplyChain()
 
-    p = Product()
-    add_product(sc, p)
-    c = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(p => [100.0]), Seattle))
-    s = add_storage(sc, Storage(1000, 0, 0, true, Dict{Product, Float64}(p => 100.0), Seattle))
-    l = add_lane(sc, Lane(s, c, 1, 0))
+    product = Product("p1")
+    add_product!(sc, product)
+    c = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(c, product; demand=[100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 0.0, 0.0, true, Seattle))
+    add_product!(storage, product; initial_inventory=100, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    l = add_lane!(sc, Lane(storage, c, 1, 0))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m
+    return sc
 end
 
 function create_test_model2()
     #supplier -> storage -> customer
     sc = SupplyChain()
 
-    product = Product()
-    add_product(sc, product)
-    c = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product => [100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product => 0.0), Seattle))
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product =>0.0), Seattle))
-    l1 = add_lane(sc, Lane(storage, c, 1, 0))
-    l2 = add_lane(sc, Lane(supplier, storage, 1, 0))
+    product = Product("p1")
+    add_product!(sc, product)
+    c = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(c, product; demand=[100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product; unit_cost=0.0, maximum_throughput=Inf)
+    l1 = add_lane!(sc, Lane(storage, c, 1, 0))
+    l2 = add_lane!(sc, Lane(supplier, storage, 1, 0))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product, supplier
+    return sc, product, supplier
 end
 
 function create_test_model3()
     #plant -> storage -> customer
     sc = SupplyChain()
 
-    product = add_product(sc, Product())
-    customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product => [100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product => 0.0), Seattle))
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(product => Dict{Product, Float64}()),
-                                            Dict{Product, Float64}(product => 1), Seattle))
-    l1 = add_lane(sc, Lane(storage, customer, 1, 0))
-    l2 = add_lane(sc, Lane(plant, storage, 1, 0))
+    product = add_product!(sc, Product("p1"))
+    customer = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(customer, product; demand=[100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
+    l1 = add_lane!(sc, Lane(storage, customer, 1, 0))
+    l2 = add_lane!(sc, Lane(plant, storage, 1, 0))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product, plant
+    return sc, product, plant
 end
 
 function create_test_model4()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain()
 
-    product1 = add_product(sc, Product())
-    product2 = add_product(sc, Product())
+    product1 = add_product!(sc, Product("p1"))
+    product2 = add_product!(sc, Product("p2"))
 
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product1 =>0.0), Seattle))
-    customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product2 => [100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product2 => 0.0), Seattle))
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(product2 => Dict{Product, Float64}(product1 => 1)),
-                                            Dict{Product, Float64}(product2 => 1), Seattle))
-    l1 = add_lane(sc, Lane(storage, customer, 1, 0))
-    l2 = add_lane(sc, Lane(plant, storage, 1, 0))
-    l3 = add_lane(sc, Lane(supplier, plant, 1, 0))
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
+    customer = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(customer, product2; demand=[100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product2; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
+    l1 = add_lane!(sc, Lane(storage, customer, 1, 0))
+    l2 = add_lane!(sc, Lane(plant, storage, 1, 0))
+    l3 = add_lane!(sc, Lane(supplier, plant, 1, 0))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product2, plant
+    return sc, product2, plant
 end
 
 function create_test_model5()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain(2)
 
-    product1 = add_product(sc, Product())
-    product2 = add_product(sc, Product())
+    product1 = add_product!(sc, Product("p1"))
+    product2 = add_product!(sc, Product("p2"))
 
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product1 => 0.0), Seattle))
-    customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product2 => [100.0, 100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product2 => 0.0), Seattle))
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(product2 => Dict{Product, Float64}(product1 => 1)),
-                                            Dict{Product, Float64}(product2 => 1), Seattle))
-    l1 = add_lane(sc, Lane(storage, customer, 1, 0))
-    l2 = add_lane(sc, Lane(plant, storage, 1, 0))
-    l3 = add_lane(sc, Lane(supplier, plant, 1, 0))
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
+    customer = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(customer, product2; demand=[100.0, 100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product2; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
+    l1 = add_lane!(sc, Lane(storage, customer, 1, 0))
+    l2 = add_lane!(sc, Lane(plant, storage, 1, 0))
+    l3 = add_lane!(sc, Lane(supplier, plant, 1, 0))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product2, plant
+    return sc, product2, plant
 end
 
 function create_test_model6()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain(2)
 
-    product1 = add_product(sc, Product())
-    product2 = add_product(sc, Product())
+    product1 = add_product!(sc, Product("p1"))
+    product2 = add_product!(sc, Product("p2"))
 
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product1 => 0.0), Seattle))
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
 
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(product2 => Dict{Product, Float64}(product1 => 1)),
-                                            Dict{Product, Float64}(product2 => 1), Seattle))
-    l3 = add_lane(sc, Lane(supplier, plant, 1))
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
+    l3 = add_lane!(sc, Lane(supplier, plant, 1))
 
     for i in 1:500
-        customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product2 => [100.0, 100.0]), Seattle))
+        customer = add_customer!(sc, Customer("c$i", Seattle))
+        add_product!(customer, product2; demand=[100.0, 100.0])
     end 
 
     for i in 1:50
-        storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product2 => 0.0), Seattle))
-        l2 = add_lane(sc, Lane(plant, storage, 1))
+        storage = add_storage!(sc, Storage("s$i", 1000.0, 500.0, 500.0, false, Seattle))
+        add_product!(storage, product2; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+        l2 = add_lane!(sc, Lane(plant, storage, 1))
     end
 
     for customer in sc.customers, storage in sc.storages
-        l1 = add_lane(sc, Lane(storage, customer, 1))
+        l1 = add_lane!(sc, Lane(storage, customer, 1))
     end
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product2, plant
+    return sc, product2, plant
 end
 
 function create_test_broken_model()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain(2)
 
-    product1 = add_product(sc, Product())
-    product2 = add_product(sc, Product())
+    product1 = add_product!(sc, Product("p1"))
+    product2 = add_product!(sc, Product("p2"))
 
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product1 => 0.0), Seattle))
-    customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product2 => [100.0, 100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product2 => 0.0), Seattle))
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(),
-                                            #Dict{Product, Dict{Product, Float64}}(product2 => Dict{Product, Float64}(product1 => 1)),
-                                            Dict{Product, Float64}(product2 => 1), Seattle))
-    l1 = add_lane(sc, Lane(storage, customer, 1))
-    l2 = add_lane(sc, Lane(plant, storage, 1))
-    l3 = add_lane(sc, Lane(supplier, plant, 1))
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
+    customer = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(customer, product2; demand=[100.0, 100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product2; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    l1 = add_lane!(sc, Lane(storage, customer, 1))
+    l2 = add_lane!(sc, Lane(plant, storage, 1))
+    l3 = add_lane!(sc, Lane(supplier, plant, 1))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product2, plant
+    return sc, product2, plant
 end
-
 
 function create_test_infeasible_model()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain(2)
 
-    product1 = add_product(sc, Product())
-    product2 = add_product(sc, Product())
+    product1 = add_product!(sc, Product("p1"))
+    product2 = add_product!(sc, Product("p2"))
 
-    supplier = add_supplier(sc, Supplier(Dict{Product, Float64}(product1 => 0.0), Seattle))
-    customer = add_customer(sc, Customer(Dict{Product, Array{Float64, 1}}(product2 => [100.0, 100.0]), Seattle))
-    storage = add_storage(sc, Storage(1000, 500, 500, false, Dict{Product, Float64}(product2 => 0.0), Seattle))
-    plant = add_production(sc, Production(1000, 500, 500, false, 
-                                            Dict{Product, Dict{Product, Float64}}(),
-                                            Dict{Product, Float64}(), Seattle))
-    l1 = add_lane(sc, Lane(storage, customer, 1))
-    l2 = add_lane(sc, Lane(plant, storage, 1))
-    l3 = add_lane(sc, Lane(supplier, plant, 1))
+    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
+    customer = add_customer!(sc, Customer("c1", Seattle))
+    add_product!(customer, product2; demand=[100.0, 100.0])
+    storage = add_storage!(sc, Storage("s1", 1000.0, 500.0, 500.0, false, Seattle))
+    add_product!(storage, product2; initial_inventory=0, unit_handling_cost=0.0, maximum_throughput=Inf, safety_stock_cover=0.0)
+    plant = add_plant!(sc, Plant("plant1", 1000.0, 500.0, 500.0, false, Seattle))
+    l1 = add_lane!(sc, Lane(storage, customer, 1))
+    l2 = add_lane!(sc, Lane(plant, storage, 1))
+    l3 = add_lane!(sc, Lane(supplier, plant, 1))
 
-    m  = create_optimization_model(sc, HiGHS.Optimizer)
-
-    return m, product2, plant
+    return sc, product2, plant
 end
 
 
 @testset "Happy Path" begin
-@test add_lane(SupplyChain(), 
-                         Lane(Customer(Dict{Product, Array{Float64, 1}}(), Seattle), 
-                              Customer(Dict{Product, Array{Float64, 1}}(), Seattle), 
+@test haversine(0, 0, 0, 0) == 0
+
+@test haversine(51.510357, -0.116773, 38.889931, -77.009003) ≈ 5897658.289
+
+@test add_lane!(SupplyChain(), 
+                         Lane(Customer("c1", Seattle), 
+                              Customer("c2", Seattle), 
                               1.0,
                               0,
                               0)) isa Lane
@@ -201,64 +200,64 @@ end
 @test !isnothing(create_test_model())
 
 @test begin
-    m = create_test_model()
-    optimize!(m)
-    objective_value(m) == 1100
+    sc = create_test_model()
+    SupplyChainOptimization.optimize!(sc)
+    get_total_costs(sc) == 1100
     true
 end
 
 @test begin
-    m, product, supplier = create_test_model2()
-    optimize!(m)
+    sc, product, supplier = create_test_model2()
+    SupplyChainOptimization.optimize!(sc)
     #print(value.(m[:bought]))
-    objective_value(m) == 1000 + 500 + 200 && value.(m[:bought])[product, supplier, 1] == 100
+    get_total_costs(sc) == 1000 + 500 + 200 && value.(sc.optimization_model[:bought])[product, supplier, 1] == 100
     true
 end
 
 @test begin
-    m, product, plant = create_test_model3()
-    optimize!(m)
-    objective_value(m) == 3300 && value.(m[:produced])[product, plant, 1] == 100
+    sc, product, plant = create_test_model3()
+    SupplyChainOptimization.optimize!(sc)
+    get_total_costs(sc) == 3300 && get_production(sc, plant, product, 1) == 100
 end
 
 @test begin
-    m, product2, plant = create_test_model4()
-    optimize!(m)
-    objective_value(m) == 3400 && value.(m[:produced])[product2, plant, 1] == 100
+    sc, product2, plant = create_test_model4()
+    SupplyChainOptimization.optimize!(sc)
+    get_total_costs(sc) == 3400 && get_production(sc, plant, product2, 1) == 100
 end
 
 @test begin
-    m, product2, plant = create_test_model5()
-    optimize!(m)
+    sc, product2, plant = create_test_model5()
+    SupplyChainOptimization.optimize!(sc)
     #print(value.(m[:opening]))
     #print(value.(m[:closing]))
     #print(value.(m[:opened]))
     #print(value.(m[:sent]))
-    objective_value(m) == 1500 + 3000 + 600 + 200 && value.(m[:produced])[product2, plant, 1] == 200
+    get_total_costs(sc) == 1500 + 3000 + 600 + 200 && get_production(sc, plant, product2, 1)  == 200
 end
 end
 
 @testset "Infeasible" begin
     @test  begin
-        m, product2, plant = create_test_infeasible_model()
-        optimize!(m)
-        status = termination_status(m)
+        sc, product2, plant = create_test_infeasible_model()
+        SupplyChainOptimization.optimize!(sc)
+        status = termination_status(sc.optimization_model)
         status == MathOptInterface.INFEASIBLE
     end
 end
 
 @testset "Invalid" begin
-@test_throws ArgumentError begin
-    m, product2, plant = create_test_broken_model()
-    optimize!(m)
-    status = termination_status(m)
-end
+#@test_throws ArgumentError begin
+#    sc, product2, plant = create_test_broken_model()
+#    SupplyChainOptimization.optimize!(sc)
+#    status = termination_status(sc.optimization_model)
+#end
 end
 
 @testset "Scaling" begin
 @test begin
-    m, product2, plant = create_test_model6()
-    optimize!(m)
+    sc, product2, plant = create_test_model6()
+    SupplyChainOptimization.optimize!(sc)
     true
 end
 end
