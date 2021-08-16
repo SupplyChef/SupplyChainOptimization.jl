@@ -33,8 +33,8 @@ struct Product
 end
 
 Base.:(==)(x::Product, y::Product) = x.name == y.name 
-Base.:hash(x::Product) = hash(x.name)
-show(io, x::Product) = print(io, x.name)
+Base.hash(x::Product, h::UInt64) = hash(x.name, h)
+Base.show(io::IO, x::Product) = print(io, x.name)
 
 """
 A transportation lane between two nodes of the supply chain.
@@ -78,8 +78,8 @@ function add_product!(customer::Customer, product::Product; demand::Array{Float6
 end
 
 Base.:(==)(x::Customer, y::Customer) = x.name == y.name 
-Base.:hash(x::Customer) = hash(x.name)
-show(io, x::Customer) = print(io, x.name)
+Base.hash(x::Customer, h::UInt64) = hash(x.name, h)
+Base.show(io::IO, x::Customer) = print(io, x.name)
 
 """
 A supplier.
@@ -104,8 +104,8 @@ function add_product!(supplier::Supplier, product; unit_cost, maximum_throughput
 end
 
 Base.:(==)(x::Supplier, y::Supplier) = x.name == y.name 
-Base.:hash(x::Supplier) = hash(x.name)
-show(io, x::Supplier) = print(io, x.name)
+Base.hash(x::Supplier, h::UInt64) = hash(x.name, h)
+Base.show(io::IO, x::Supplier) = print(io, x.name)
 
 """
 A storage location.
@@ -148,8 +148,8 @@ function add_product!(storage::Storage, product; initial_inventory, unit_handlin
 end
 
 Base.:(==)(x::Storage, y::Storage) = x.name == y.name 
-Base.:hash(x::Storage) = hash(x.name)
-show(io, x::Storage) = print(io, x.name)
+Base.hash(x::Storage, h::UInt64) = hash(x.name, h)
+Base.show(io::IO, x::Storage) = print(io, x.name)
 
 """
 A plant.
@@ -183,8 +183,8 @@ function add_product!(plant::Plant, product; bill_of_material::Dict{Product, Flo
 end
 
 Base.:(==)(x::Plant, y::Plant) = x.name == y.name 
-Base.:hash(x::Plant) = hash(x.name)
-show(io, x::Plant) = print(io, x.name)
+Base.hash(x::Plant, h::UInt64) = hash(x.name, h)
+Base.show(io::IO, x::Plant) = print(io, x.name)
 
 """
 The supply chain.

@@ -23,7 +23,12 @@ export SupplyChain,
       add_plant!,
       optimize!,
       get_total_costs,
+      get_total_fixed_costs,
+      get_total_transportation_costs,
       get_production,
+      is_opened,
+      is_opening,
+      is_closing,
       haversine,
       plot_nodes,
       plot_flows,
@@ -223,6 +228,26 @@ function get_total_costs(supply_chain::SupplyChain)
 end
 
 """
+Gets the total fixed costs of operating the supply chain.
+"""
+function get_total_fixed_costs(supply_chain::SupplyChain)
+    if isnothing(supply_chain.optimization_model) || (termination_status(supply_chain.optimization_model) != JuMP.MathOptInterface.OPTIMAL)
+        throw(ErrorException("The optimize! function must be called first."))
+    end
+    return value(supply_chain.optimization_model[:total_fixed_costs])
+end
+
+"""
+Gets the total transportation costs of operating the supply chain.
+"""
+function get_total_transportation_costs(supply_chain::SupplyChain)
+    if isnothing(supply_chain.optimization_model) || (termination_status(supply_chain.optimization_model) != JuMP.MathOptInterface.OPTIMAL)
+        throw(ErrorException("The optimize! function must be called first."))
+    end
+    return value(supply_chain.optimization_model[:total_transportation_costs])
+end
+
+"""
 Gets the amount of a given product produced at a given plant during a given period.
 """
 function get_production(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
@@ -269,7 +294,7 @@ function is_opened(supply_chain::SupplyChain, storage::Storage, period=1)
     if isnothing(supply_chain.optimization_model) || (termination_status(supply_chain.optimization_model) != JuMP.MathOptInterface.OPTIMAL)
         throw(ErrorException("The optimize! function must be called first."))
     end
-    return value(supply_chain.optimization_model[:opened][storage, period])
+    return value(supply_chain.optimization_model[:opened][storage, period]) ≈ 1.0
 end
 
 """
@@ -279,7 +304,7 @@ function is_opening(supply_chain::SupplyChain, storage::Storage, period=1)
     if isnothing(supply_chain.optimization_model) || (termination_status(supply_chain.optimization_model) != JuMP.MathOptInterface.OPTIMAL)
         throw(ErrorException("The optimize! function must be called first."))
     end
-    return value(supply_chain.optimization_model[:opening][storage, period])
+    return value(supply_chain.optimization_model[:opening][storage, period]) ≈ 1.0
 end
 
 """
@@ -289,7 +314,7 @@ function is_closing(supply_chain::SupplyChain, storage::Storage, period=1)
     if isnothing(supply_chain.optimization_model) || (termination_status(supply_chain.optimization_model) != JuMP.MathOptInterface.OPTIMAL)
         throw(ErrorException("The optimize! function must be called first."))
     end
-    return value(supply_chain.optimization_model[:closing][storage, period])
+    return value(supply_chain.optimization_model[:closing][storage, period]) ≈ 1.0
 end
 
 """

@@ -202,8 +202,10 @@ end
 @test begin
     sc = create_test_model()
     SupplyChainOptimization.optimize!(sc)
-    get_total_costs(sc) == 1100
-    true
+    all(is_opened(sc, storage) for storage in sc.storages) == 1 &&
+    get_total_costs(sc) == 1100 &&
+    get_total_fixed_costs(sc) == 1000 &&
+    get_total_transportation_costs(sc) == 100
 end
 
 @test begin
@@ -211,7 +213,6 @@ end
     SupplyChainOptimization.optimize!(sc)
     #print(value.(m[:bought]))
     get_total_costs(sc) == 1000 + 500 + 200 && value.(sc.optimization_model[:bought])[product, supplier, 1] == 100
-    true
 end
 
 @test begin
