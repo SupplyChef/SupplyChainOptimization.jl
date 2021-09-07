@@ -244,9 +244,29 @@ end
 end
 
 @test begin
+    sc = create_test_model()
+    SupplyChainOptimization.optimize_network!(sc)
+    plot_costs(sc)
+    true
+end
+
+@test begin
+    sc = create_test_model()
+    SupplyChainOptimization.optimize_network!(sc)
+    plot_flows(sc)
+    true
+end
+
+@test begin
+    sc = create_test_model()
+    SupplyChainOptimization.optimize_network!(sc)
+    plot_network(sc)
+    true
+end
+
+@test begin
     sc, product, supplier = create_test_model2()
     SupplyChainOptimization.optimize_network!(sc)
-    #print(value.(m[:bought]))
     get_total_costs(sc) == 1000 + 500 + 200 && value.(sc.optimization_model[:bought])[product, supplier, 1] == 100
 end
 
@@ -265,10 +285,6 @@ end
 @test begin
     sc, product2, plant = create_test_model5()
     SupplyChainOptimization.optimize_network!(sc)
-    #print(value.(m[:opening]))
-    #print(value.(m[:closing]))
-    #print(value.(m[:opened]))
-    #print(value.(m[:sent]))
     get_total_costs(sc) == 1500 + 3000 + 600 + 200 && get_production(sc, plant, product2, 1)  == 200
 end
 end
