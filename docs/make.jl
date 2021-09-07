@@ -4,7 +4,13 @@ using SupplyChainOptimization
 makedocs(
     sitename = "SupplyChainOptimization",
     format = Documenter.HTML(),
-    modules = [SupplyChainOptimization]
+    modules = [SupplyChainOptimization],
+    pages = ["index.md",
+            "Examples" => ["optimization flows.md", "optimization locations.md", "multi-period optimization.md", "inventory estimation.md", "adding special constraints.md"],
+            "Internals" => ["optimization model.md"],
+            "API" => ["reference.md"],
+            "Sponsor" => ["sponsor.md"]
+            ]
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
