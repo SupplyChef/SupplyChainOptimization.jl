@@ -36,7 +36,12 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-optimize_network!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">                 0.00 (postsolve)
+optimize_network!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">        1.72803993337e-11 (bound viol.)
+                    1.25055521494e-14 (int. viol.)
+                    1.2332748156e-09 (row viol.)
+  Timing            0.60 (total)
+                    0.00 (presolve)
+                    0.00 (postsolve)
   Nodes             137
   LP iterations     8283 (total)
                     4808 (strong br.)
@@ -70,8 +75,8 @@ Solving report
                     24600773.8373 (objective)
                     0 (bound viol.)
                     0 (int. viol.)
-                    1.21508492157e-08 (row viol.)
-  Timing            0.32 (total)
+                    4.53655957244e-09 (row viol.)
+  Timing            0.31 (total)
                     0.01 (presolve)
                     0.00 (postsolve)
   Nodes             1
@@ -102,19 +107,17 @@ Solving root node LP relaxation
  S       0       0         0   0.00%   8865592.090628  99975357.80941    91.13%     1570    109      0       475     0.4s
  S       0       0         0   0.00%   10227749.83968  99150748.34406    89.68%     2874    252      0       621     0.7s
  S       0       0         0   0.00%   10650501.74486  99100595.37456    89.25%     3328    286      0       657     0.8s
- S       0       0         0   0.00%   11972927.08379  98291709.08586    87.82%     4622    388      0       759     1.0s
+ S       0       0         0   0.00%   11972927.08379  98291709.08586    87.82%     4622    388      0       759     0.9s
  S       0       0         0   0.00%   13192350.59574  97468391.11034    86.46%     5607    490      0       864     1.1s
  S       0       0         0   0.00%   13463658.15146  89929794.89151    85.03%     6032    522      0       899     1.2s
- S       0       0         0   0.00%   13986190.19234  87742807.66221    84.06%     6826    579      0       965     1.3s
- S       0       0         0   0.00%   14418422.4637   85008430.43182    83.04%     7630    639      0      1029     1.5s
+ S       0       0         0   0.00%   13986190.19234  87742807.66221    84.06%     6826    579      0       965     1.4s
+ S       0       0         0   0.00%   14418422.4637   85008430.43182    83.04%     7630    639      0      1029     1.6s
  S       0       0         0   0.00%   16837933.55554  84017694.58994    79.96%    10286    814      0      1232     2.1s
  S       0       0         0   0.00%   18744288.32916  81462972.44722    76.99%    11029    930      0      1373     2.5s
- S       0       0         0   0.00%   22834970.49606  81425114.01991    71.96%    11610   1497      0      2071     4.9s
- S       0       0         0   0.00%   24078802.3765   77187311.06536    68.80%    11967   1705      0      2344     6.3s
- S       0       0         0   0.00%   24171078.12954  74941704.73423    67.75%    11470   1726      0      2371     6.4s
- S       0       0         0   0.00%   24225871.102    71458535.85262    66.10%    11809   1743      0      2394     6.6s
- S       0       0         0   0.00%   24589023.79534  60473164.42502    59.34%    11949   1850      0      2576     7.1s
- S</code></pre><p>After optimizing the network we can visualize the results.</p><pre><code class="language- hljs">plot_flows(sc; showlegend=false)</code></pre><p><img src="../assets/getting_started.png" alt="optimized locations"/></p><p>In the next example, we optimize a more complete network: we will consider where to build plants, storage locations to service customers and which suppliers to buy from. The customers consume one type of product which is produced by the plants and stored at the storage locations. The plants need a different product as raw material. This product is sourced from suppliers. </p><p>The process is similar to the previous example: we setup the network using the built-in concepts, call the optimize_network! function and query the results. </p><pre><code class="language-julia hljs">using CSV
+ S       0       0         0   0.00%   22834970.49606  81425114.01991    71.96%    11610   1497      0      2071     4.8s
+ S       0       0         0   0.00%   24078802.3765   77187311.06536    68.80%    11967   1705      0      2344     6.2s
+ S       0       0         0   0.00%   24171078.12954  74941704.73423    67.75%    11470   1726      0      2371     6.3s
+ S       0       0         0   0.00%</code></pre><p>After optimizing the network we can visualize the results.</p><pre><code class="language- hljs">plot_flows(sc; showlegend=false)</code></pre><p><img src="../assets/getting_started.png" alt="optimized locations"/></p><p>In the next example, we optimize a more complete network: we will consider where to build plants, storage locations to service customers and which suppliers to buy from. The customers consume one type of product which is produced by the plants and stored at the storage locations. The plants need a different product as raw material. This product is sourced from suppliers. </p><p>The process is similar to the previous example: we setup the network using the built-in concepts, call the optimize_network! function and query the results. </p><pre><code class="language-julia hljs">using CSV
 using DataFrames
 using SupplyChainOptimization
 
@@ -177,14 +180,16 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-optimize_network!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  0       0         0   0.00%   24758957.1321   55874286.90037    55.69%    12103   1892      0      2660     7.5s
- S       0       0         0   0.00%   24783884.94637  53465052.41444    53.64%    10846   1897      0      2701     7.7s
- S       0       0         0   0.00%   25512735.12634  34884898.60282    26.87%    11854   2009      0      2993     9.0s
+optimize_network!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">24225871.102    71458535.85262    66.10%    11809   1743      0      2394     6.4s
+ S       0       0         0   0.00%   24589023.79534  60473164.42502    59.34%    11949   1850      0      2576     7.0s
+ S       0       0         0   0.00%   24758957.1321   55874286.90037    55.69%    12103   1892      0      2660     7.4s
+ S       0       0         0   0.00%   24783884.94637  53465052.41444    53.64%    10846   1897      0      2701     7.5s
+ S       0       0         0   0.00%   25512735.12634  34884898.60282    26.87%    11854   2009      0      2993     8.8s
 
         Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work
      Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
 
- L       0       0         0   0.00%   25583793.79267  25592017.83734     0.03%    11977   2015      0      3115     9.8s
+ L       0       0         0   0.00%   25583793.79267  25592017.83734     0.03%    11977   2015      0      3115     9.6s
 
 Solving report
   Status            Optimal
@@ -192,20 +197,20 @@ Solving report
   Dual bound        25592017.8373
   Solution status   feasible
                     25592017.8373 (objective)
-                    1.52411416821e-12 (bound viol.)
-                    6.17416232345e-16 (int. viol.)
-                    1.98997440748e-09 (row viol.)
-  Timing            10.50 (total)
-                    0.11 (presolve)
+                    0 (bound viol.)
+                    1.98061812846e-17 (int. viol.)
+                    1.53740984388e-08 (row viol.)
+  Timing            10.47 (total)
+                    0.12 (presolve)
                     0.00 (postsolve)
   Nodes             1
-  LP iterations     3425 (total)
-                    34 (strong br.)
+  LP iterations     3447 (total)
+                    33 (strong br.)
                     2713 (separation)
-                    247 (heuristics)
+                    269 (heuristics)
 
 Presolving model
-630 rows, 7636 cols, 22696 nonzeros
+630 rows, 7640 cols, 22700 nonzeros
 430 rows, 7460 cols, 22280 nonzeros
 
 Solving MIP model with:
@@ -224,18 +229,17 @@ Solving root node LP relaxation
  S       0       0         0   0.00%   -inf            188176858.7307  9999.00%        0      0      0         0     0.1s
  S       0       0         0   0.00%   16686041.72807  181415766.7453    90.80%     2468    280      0       681     0.6s
  S       0       0         0   0.00%   16777867.21308  171345024.3789    90.21%     2842    295      0       697     0.6s
- S       0       0         0   0.00%   17895818.26577  166005985.5907    89.22%     4360    362      0       769     0.8s
+ S       0       0         0   0.00%   17895818.26577  166005985.5907    89.22%     4360    362      0       769     0.7s
  S       0       0         0   0.00%   20367177.502    158133573.0918    87.12%     4821    378      0       800     0.8s
- S       0       0         0   0.00%   25574987.60265  152962074.1095    83.28%     8808    714      0      1211     2.0s
- S       0       0         0   0.00%   27219270.36904  150549229.6989    81.92%    10667    920      0      1482     3.4s
- S       0       0         0   0.00%   27619584.74351  149674968.037     81.55%    10651    962      0      1541     3.5s
- S       0       0         0   0.00%   28909915.99808  148787254.8834    80.57%    10904   1044      0      1705     3.8s
- S       0       0         0   0.00%   29427582.85851  111875919.0599    73.70%    11089   1075      0      1836     4.0s
- S       0       0         0   0.00%   29580378.43228  101258457.6543    70.79%    10942   1092      0      1856     4.1s
- S       0       0         0   0.00%   29889754.98577  95258873.64528    68.62%    10791   1104      0      1981     4.5s
- S       0       0         0   0.00%   30000444.33575  90167611.94235    66.73%    11099   1122      0      2109     4.8s
- S       0       0         0   0.00%   30011362.69458  87592042.80449    65.74%    11247   1126      0      2116     4.9s
- S       0       0         0   0.00%   30058551.74277  82872424.80227    63.73%    10597   1130      0      2135     4.9s
- L       0       0         0   0.00%   30141719.17573  46077261.40163    34.58%    10915   1141      0      2164     8.1s
-        25       3         3   0.00%   30141719.17573  46077261.40163    34.58%    10920   1076      0     17698    13.2s
-        46       5        13   0.36%   30141719.17573  46077261.40163    34.58%    10967   1076      0     38156    19.2s</code></pre><p>The network can be visualized (see below). We can see that the optimal network has two clusters of plants/storage locations; one to service the West coast and one to service the East coast. Additionally two smaller storage locations are used as hubs to reduce overall costs.</p><p><img src="../assets/optimizing_locations_network.png" alt="optimized locations"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../optimization flows/">« Flow Optimization</a><a class="docs-footer-nextpage" href="../multi-period optimization/">Multi-period Optimization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:40">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ S       0       0         0   0.00%   25574987.60265  152962074.1095    83.28%     8808    714      0      1211     1.8s
+ S       0       0         0   0.00%   27219270.36904  150549229.6989    81.92%    10668    920      0      1475     3.2s
+ S       0       0         0   0.00%   27619584.74351  149674968.037     81.55%    10653    962      0      1534     3.4s
+ S       0       0         0   0.00%   28909915.99808  148787254.8834    80.57%    10905   1044      0      1698     3.7s
+ S       0       0         0   0.00%   29427582.85851  111875919.0599    73.70%    11092   1075      0      1829     3.9s
+ S       0       0         0   0.00%   29580378.43228  101258457.6543    70.79%    10946   1092      0      1849     4.0s
+ S       0       0         0   0.00%   29889754.98577  95258873.64528    68.62%    10953   1104      0      1973     4.3s
+ S       0       0         0   0.00%   30000444.33575  90167611.94235    66.73%    10822   1122      0      2100     4.6s
+ S       0       0         0   0.00%   30011362.69458  87592042.80449    65.74%    10971   1126      0      2109     4.7s
+ S       0       0         0   0.00%   30104510.26763  86267741.0501     65.10%     9653   1138      0      2155     4.8s
+ L       0       0         0   0.00%   30130541.3346   46077261.40163    34.61%     9736   1139      0      2166     9.3s
+        25       3         3   0.00%   30130541.33</code></pre><p>The network can be visualized (see below). We can see that the optimal network has two clusters of plants/storage locations; one to service the West coast and one to service the East coast. Additionally two smaller storage locations are used as hubs to reduce overall costs.</p><p><img src="../assets/optimizing_locations_network.png" alt="optimized locations"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../optimization flows/">« Flow Optimization</a><a class="docs-footer-nextpage" href="../multi-period optimization/">Multi-period Optimization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:43">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -38,7 +38,7 @@ end
 
 optimize_network!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
 Presolving model
-727 rows, 3641 cols, 10894 nonzeros
+727 rows, 3611 cols, 10864 nonzeros
 583 rows, 3430 cols, 10512 nonzeros
 
 Solving MIP model with:
@@ -54,17 +54,19 @@ Solving root node LP relaxation
         Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work
      Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
 
-         0       0         0   0.00%   53783657.95958  inf                  inf        0      0      0       522     0.1s
- L       0       0         0   0.00%   97635244.80566  154482233.9312    36.80%     5465   1030   2524      4874     3.9s
- L       0       0         0   0.00%   97635244.80566  149459153.962     34.67%     4762    887   2524      4913    11.9s
-        11       0         1   0.10%   97635244.80566  149459153.962     34.67%     4763    887   2544    100317    27.3s
-        18       1         8  18.75%   97635244.80566  149459153.962     34.67%     4798    887   2668    125446    32.4s
-        28       1        11  93.80%   101732450.5539  149459153.962     31.93%     4390   1048   2798    153004    38.3s
-        99       9        44  98.96%   106908645.4173  149459153.962     28.47%     4257    863   2941    174799    43.7s
-       145      12        66  99.43%   106908645.4173  149459153.962     28.47%     5219    933   3079    197575    49.4s
-       221      12       103  99.74%   116952458.757   149459153.962     21.75%     5639   1021   3383    219343    54.4s
- T     275      10       129  99.79%   129855373.4661  148448514.5519    12.52%     5670   1070   3683    231980    57.4s
- T     288       8       136  99.83%   138474734.4536  148448514.5519     6.72%     5933   1126   3727    237388    58.7s
+         0       0         0   0.00%   53783657.95958  inf                  inf        0      0      0       526     0.1s
+         0       0         0   0.00%   101457483.6809  inf                  inf     4390   1115   2734      6257     5.1s
+ L       0       0         0   0.00%   106141093.7977  187744738.9072    43.47%     3060   1197   4275      8805     9.6s
+ L       0       0         0   0.00%   106141093.7977  148448514.5519    28.50%     2832   1029   4275      8848    25.4s
+         6       1         1   3.12%   106141093.7977  148448514.5519    28.50%     2836   1029   4280    169810    51.9s
+        14       3         4  35.94%   106141093.7977  148448514.5519    28.50%     2867   1029   4454    191483    57.5s
+        43       7        18  79.54%   108970717.5745  148448514.5519    26.59%     3284   1207   4505    210912    62.7s
+        64      11        26  81.41%   108970717.5745  148448514.5519    26.59%     3318   1231   4616    227496    67.7s
+        84      14        35  92.54%   117466878.3611  148448514.5519    20.87%     4093   1412   4679    243656    73.5s
+       112      14        49  93.73%   127070984.7184  148448514.5519    14.40%     4582   1407   4769    260645    78.6s
+       148      13        68  96.79%   138702076.1937  148448514.5519     6.57%     4665   1386   4849    276653    83.6s
+ B     158      10        74  97.03%   138702076.1937  148448514.5519     6.57%     4463   1391   4922    285169    86.6s
+       168       1        84  99.95%   145625783.0916  148448514.5519     1.90%     4546   1478   4988    305717    92.1s
 
 Solving report
   Status            Optimal
@@ -72,17 +74,17 @@ Solving report
   Dual bound        148448514.552
   Solution status   feasible
                     148448514.552 (objective)
-                    9.66374968867e-11 (bound viol.)
-                    2.45646592419e-15 (int. viol.)
-                    1.6664121061e-08 (row viol.)
-  Timing            60.26 (total)
+                    3.71457938409e-12 (bound viol.)
+                    2.20707998303e-16 (int. viol.)
+                    1.7462298274e-08 (row viol.)
+  Timing            92.35 (total)
                     0.05 (presolve)
                     0.00 (postsolve)
-  Nodes             299
-  LP iterations     245955 (total)
-                    125794 (strong br.)
-                    10595 (separation)
-                    27865 (heuristics)
+  Nodes             169
+  LP iterations     306741 (total)
+                    135515 (strong br.)
+                    19361 (separation)
+                    63311 (heuristics)
 
 Presolving model
 550 rows, 14120 cols, 42280 nonzeros
@@ -106,7 +108,5 @@ Solving root node LP relaxation
  S       0       0         0   0.00%   8865592.090628  99975357.80941    91.13%     1570    109      0       475     0.4s
  S       0       0         0   0.00%   10227749.83968  99150748.34406    89.68%     2874    252      0       621     0.7s
  S       0       0         0   0.00%   10650501.74486  99100595.37456    89.25%     3328    286      0       657     0.8s
- S       0       0         0   0.00%   11972927.08379  98291709.08586    87.82%     4622    388      0       759     1.0s
- S       0       0         0   0.00%   13192350.59574  97468391.11034    86.46%     5607    490      0       864     1.1s
- S       0       0         0   0.00%   13463658.15146  89929794.89151    85.03%     6032    522      0       899     1.2s
- S       0       0         0   0.0</code></pre><p>After optimizing the network we can visualize the results.</p><pre><code class="language- hljs">plot_flows(sc; showlegend=false)</code></pre><p><img src="assets/getting_started.png" alt="getting_started"/></p><p>SupplyChainOptimization comes with a variety of built-in concepts including Customers, Lanes, Plants, Storages, and Suppliers. Each of these concepts has attributes that are used to ensure constraints are met and costs are minimized. </p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="optimization flows/">Flow Optimization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:40">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ S       0       0         0   0.00%   11972927.08379  98291709.08586    87.82%     4622    388      0       759     0.9s
+ S       0       0         0   0.0</code></pre><p>After optimizing the network we can visualize the results.</p><pre><code class="language- hljs">plot_flows(sc; showlegend=false)</code></pre><p><img src="assets/getting_started.png" alt="getting_started"/></p><p>SupplyChainOptimization comes with a variety of built-in concepts including Customers, Lanes, Plants, Storages, and Suppliers. Each of these concepts has attributes that are used to ensure constraints are met and costs are minimized. </p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="optimization flows/">Flow Optimization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:43">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
