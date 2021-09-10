@@ -11,10 +11,10 @@ end
     
     @test add_lane!(SupplyChain(), 
                              Lane(Customer("c1", Seattle), 
-                                  Customer("c2", Seattle), 
-                                  1.0,
-                                  0,
-                                  0)) isa Lane
+                                  Customer("c2", Seattle);
+                                  unit_cost=1.0,
+                                  minimum_quantity=0,
+                                  time=0)) isa Lane
     
     @test !isnothing(create_empty_model())
 end
