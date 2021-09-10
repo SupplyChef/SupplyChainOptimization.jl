@@ -1,6 +1,9 @@
 using Documenter
 using SupplyChainOptimization
 
+using  CSV
+using  DataFrames
+
 makedocs(
     sitename = "SupplyChainOptimization",
     format = Documenter.HTML(),
