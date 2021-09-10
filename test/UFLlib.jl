@@ -26,7 +26,7 @@ function parse_simple_data(file_name)
         add_storage!(sc, storage)
 
         for c in 1:customer_count
-            lane = Lane(storage, customers[c], data[2+c])
+            lane = Lane(storage, customers[c]; unit_cost=data[2+c])
             add_lane!(sc, lane)
         end
     end
@@ -69,7 +69,7 @@ function parse_orlib_data_uncap(file_name)
         
         for f in 1:facility_count
             #println(numbers[number_index])
-            lane = Lane(facilities[f], customer, parse(Float64, numbers[number_index]))
+            lane = Lane(facilities[f], customer; unit_cost=parse(Float64, numbers[number_index]))
             number_index += 1
             add_lane!(sc, lane)
         end

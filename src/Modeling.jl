@@ -51,16 +51,8 @@ struct Lane
     minimum_quantity::Float64
     time::Int
 
-    function Lane(origin, destination, unit_cost, minimum_quantity, time)
+    function Lane(origin, destination; unit_cost=0.0, minimum_quantity=0.0, time::Int=0)
         return new(origin, destination, unit_cost, minimum_quantity, time)
-    end
-
-    function Lane(origin, destination, unit_cost, time)
-        return new(origin, destination, unit_cost, 0, time)
-    end
-
-    function Lane(origin, destination, unit_cost)
-        return new(origin, destination, unit_cost, 0, 0)
     end
 end
 
@@ -151,14 +143,14 @@ struct Storage <: Node
 
     maximum_throughput::Dict{Product, Float64}
 
-    stock_cover::Dict{Product, Float64}
+    additional_stock_cover::Dict{Product, Float64}
 
     location::Location
 
     """
     Creates a new storage location.
     """
-    function Storage(name::String, location::Location; fixed_cost::Float64=0.0, opening_cost::Float64=0.0, closing_cost::Float64=Inf, 
+    function Storage(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, 
                      initial_opened::Bool=true)
         return new(name,
                    fixed_cost, opening_cost, closing_cost, 
@@ -168,11 +160,13 @@ struct Storage <: Node
     end
 end
 
-function add_product!(storage::Storage, product; initial_inventory=0, unit_handling_cost=0, maximum_throughput=Inf, stock_cover=0.0)
-    storage.initial_inventory[product] = initial_inventory
+function add_product!(storage::Storage, product; initial_inventory::Union{Real, Nothing}=0, unit_handling_cost::Real=0, maximum_throughput::Real=Inf, additional_stock_cover::Real=0.0)
+    if !isnothing(initial_inventory)
+        storage.initial_inventory[product] = initial_inventory
+    end
     storage.unit_handling_cost[product] = unit_handling_cost
     storage.maximum_throughput[product] = maximum_throughput
-    storage.stock_cover[product] = stock_cover
+    storage.additional_stock_cover[product] = additional_stock_cover
 end
 
 Base.:(==)(x::Storage, y::Storage) = x.name == y.name 
@@ -280,20 +274,26 @@ mutable struct SupplyChain
 end
 
 """
-Adds demand for a product.
+    add_demand!(supply_chain, customer, product; demand::Array{Float64, 1})
+
+Adds customer demand for a product. The demand is specified for each time period.
 """
 function add_demand!(supply_chain, customer, product; demand::Array{Float64, 1})
     add_demand!(supply_chain, Demand(customer, product, demand))
 end
 
 """
-Adds demand for a product.
+    add_demand!(supply_chain, demand)
+
+Adds demand to the supply chain.
 """
 function add_demand!(supply_chain, demand)
     push!(supply_chain.demand, demand)
 end
 
 """
+    add_product!(supply_chain, product)
+
 Adds a product to the supply chain.
 """
 function add_product!(supply_chain, product)
@@ -302,6 +302,8 @@ function add_product!(supply_chain, product)
 end
 
 """
+    add_customer!(supply_chain, customer)
+
 Adds a customer to the supply chain.
 """
 function add_customer!(supply_chain, customer)
@@ -310,6 +312,8 @@ function add_customer!(supply_chain, customer)
 end
 
 """
+    add_supplier!(supply_chain, supplier)
+
 Adds a supplier to the supply chain.
 """
 function add_supplier!(supply_chain, supplier)
@@ -318,6 +322,8 @@ function add_supplier!(supply_chain, supplier)
 end
 
 """
+    add_storage!(supply_chain, storage)
+
 Adds a storage location to the supply chain.
 """
 function add_storage!(supply_chain, storage)
@@ -326,6 +332,8 @@ function add_storage!(supply_chain, storage)
 end
 
 """
+    add_plant!(supply_chain, plant)
+
 Adds a plant to the supply chain.
 """
 function add_plant!(supply_chain, plant)
@@ -334,6 +342,8 @@ function add_plant!(supply_chain, plant)
 end
 
 """
+    add_lane!(supply_chain, lane)
+
 Adds a transportation lane to the supply chain.
 """
 function add_lane!(supply_chain, lane)

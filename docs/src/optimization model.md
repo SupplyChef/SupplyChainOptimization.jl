@@ -1,11 +1,16 @@
 # Optimization Model
 
-When the `optimize!` function is called it calls two other functions: `create_optimization_model` and `optimize_optimization_model!`.
-`create_optimization_model` creates an optimization model and stores it in the supply chain `optimization_model` attribute. This process is
-seamless and usually operates behind the scene. However there are cases where knowning about this process can be helpful. One such case is if 
-a specific constraint needs to be added to the optimization model. 
-
 The optimization model contains the following variables:
-- sent
-- opened
-- closed
+
+    - opened[plants_storages, times]: whether a plant or a storage location is opened during a given period.
+    - opening[plants_storages, times]: whether a plant or a storage location is opening during a given period (it is now opened but was closed).
+    - closing[plants_storages, times]: whether a plant or a storage location is closing during a given period (it is now closed but was opened).
+    - bought[products, suppliers, times]: the amount of product bought from a supplier during a given period.
+    - produced[products, plants, times]: the amount of product produced by a plant during a given period.
+    - stored_at_start[products, storages, times]: the amount of product stored at a storage location at the beginning of a given period. 
+    - stored_at_end[products, storages, times]: the amount of product stored at a storage location at the end of a given period.
+    - used[lanes, times]: whether a lane is used during a given period.
+    - sent[products, lanes, times]: the amount of product sent onto a lane during a given period.
+    - received[products, lanes, times]: the amount of product received from a lane during a given period.
+
+See [Adding Special Constraints](@ref) for an example on how to use these variables to add constraints to the optimization model.

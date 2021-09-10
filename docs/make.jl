@@ -6,7 +6,7 @@ makedocs(
     format = Documenter.HTML(),
     modules = [SupplyChainOptimization],
     pages = ["index.md",
-            "Examples" => ["optimization flows.md", "optimization locations.md", "multi-period optimization.md", "inventory estimation.md", "adding special constraints.md"],
+            "Examples" => ["optimization flows.md", "optimization locations.md", "multi-period optimization.md", "adding special constraints.md", "inventory movements.md"],
             "Internals" => ["optimization model.md"],
             "API" => ["reference.md"],
             "Sponsor" => ["sponsor.md"]

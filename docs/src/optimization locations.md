@@ -1,7 +1,7 @@
 # Locations Optimization
 In this section we will see how to find the best network to service customer demand. We will consider a set of 40 possible storage locations and a set of 350 customers both distributed throughout the US. We specify the cost of operating each storage location and the cost of shipping the product from each storage location to each customer. Finally we indicate the demand for each customer. Once this is done we optimize the network.
 
-```@example
+```@example continue=true
 using CSV
 using DataFrames
 using SupplyChainOptimization
@@ -36,16 +36,16 @@ for (i, r) in enumerate(eachrow(first(us_cities, 350)))
 end
 
 for c in sc.customers, s in sc.storages
-    add_lane!(sc, Lane(s, c, haversine(s.location, c.location) / 250))
+    add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-SupplyChainOptimization.optimize_network!(sc)
+optimize_network!(sc)
 ```
 
 After optimizing the network we can visualize the results.
 
 ```@example
-SupplyChainOptimization.plot_flows(sc; showlegend=false)
+plot_flows(sc; showlegend=false)
 ```
 
 ![optimized locations](./assets/getting_started.png)
@@ -107,15 +107,15 @@ for (i, r) in enumerate(eachrow(first(us_cities, 350)))
 end
 
 for s in sc.suppliers, p in sc.plants
-    add_lane!(sc, Lane(s, p, haversine(s.location, p.location) / 750))
+    add_lane!(sc, Lane(s, p; unit_cost=haversine(s.location, p.location) / 750))
 end
 
 for p in sc.plants, s in sc.storages
-    add_lane!(sc, Lane(p, s, haversine(p.location, s.location) / 750))
+    add_lane!(sc, Lane(p, s; unit_cost=haversine(p.location, s.location) / 750))
 end
 
 for c in sc.customers, s in sc.storages
-    add_lane!(sc, Lane(s, c, haversine(s.location, c.location) / 250))
+    add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
 optimize_network!(sc)

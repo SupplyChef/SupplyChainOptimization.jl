@@ -41,10 +41,10 @@ for (i, r) in enumerate(eachrow(first(us_cities, 350)))
 end
 
 for c in sc.customers, s in sc.storages
-    add_lane!(sc, Lane(s, c, haversine(s.location, c.location) / 250))
+    add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-SupplyChainOptimization.optimize_network!(sc)
+optimize_network!(sc)
 
 ```
 
@@ -58,6 +58,6 @@ In the second example, we will add a constraint on the maximal throughput that e
 add_product!(storage, product; initial_inventory=100_000, maximum_throughput=2_400)
 ```
 
-After optimizing the network we can see that some customers have been re-assigned to other storage locations to ensure that the throughput capacity is not exceeded.
+After optimizing the network we see that some customers have been re-assigned to other storage locations to ensure that the throughput capacity is not exceeded.
 
 ![optimizing_flows_maximum_throughput](./assets/optimizing_flows_maximum_throughput.png)

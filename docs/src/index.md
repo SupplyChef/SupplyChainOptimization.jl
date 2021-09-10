@@ -65,19 +65,19 @@ for (i, r) in enumerate(eachrow(first(us_cities, 350)))
 end
 
 for c in sc.customers, s in sc.storages
-    add_lane!(sc, Lane(s, c, haversine(s.location, c.location) / 250))
+    add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-SupplyChainOptimization.optimize_network!(sc)
+optimize_network!(sc)
 ```
 
 After optimizing the network we can visualize the results.
 
 ```@example
-SupplyChainOptimization.plot_flows(sc; showlegend=false)
+plot_flows(sc; showlegend=false)
 ```
 
 ![getting_started](./assets/getting_started.png)
 
 SupplyChainOptimization comes with a variety of built-in concepts including Customers, Lanes, Plants, Storages, and Suppliers.
-Each of these concepts has attrbutes that are used to ensure constraints are met and costs are minimized. 
+Each of these concepts has attributes that are used to ensure constraints are met and costs are minimized. 

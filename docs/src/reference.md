@@ -5,6 +5,7 @@
 SupplyChain
 Location
 Node
+Product
 Customer
 Lane
 Plant
@@ -21,6 +22,7 @@ add_storage!
 add_customer!
 add_product!
 add_demand!
+add_lane!
 haversine
 ```
 
@@ -34,6 +36,12 @@ optimize_network!
 get_total_costs
 get_total_fixed_costs
 get_total_transportation_costs
+get_production
+get_receipts
+get_shipments
+is_opened
+is_opening
+is_closing
 ```
 
 ## Visualization
@@ -41,4 +49,5 @@ get_total_transportation_costs
 plot_network
 plot_flows
 plot_costs
+plot_inventory
 ```
