@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Inventory Movements · SupplyChainOptimization</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">SupplyChainOptimization</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">SupplyChainOptimization.jl</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../optimization flows/">Flow Optimization</a></li><li><a class="tocitem" href="../optimization locations/">Locations Optimization</a></li><li><a class="tocitem" href="../multi-period optimization/">Multi-period Optimization</a></li><li><a class="tocitem" href="../adding special constraints/">Adding Special Constraints</a></li><li class="is-active"><a class="tocitem" href>Inventory Movements</a></li></ul></li><li><span class="tocitem">Internals</span><ul><li><a class="tocitem" href="../optimization model/">Optimization Model</a></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../reference/">Reference</a></li></ul></li><li><span class="tocitem">Sponsor</span><ul><li><a class="tocitem" href="../sponsor/">Sponsor</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Inventory Movements</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Inventory Movements</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SupplyChef/SupplyChainOptimization.jl/blob/master/docs/src/inventory movements.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Inventory-Movements"><a class="docs-heading-anchor" href="#Inventory-Movements">Inventory Movements</a><a id="Inventory-Movements-1"></a><a class="docs-heading-anchor-permalink" href="#Inventory-Movements" title="Permalink"></a></h1><p>Network optimization is mainly about long term inventory flows. In this example we will show to use SupplyChainOptimization to compute shorter term inventory movements and optimal ordering.</p><p>We will consider a simple network with one supplier, one storage location, one customer and a single product. The storage location must maintain enough inventory to meet the customer&#39;s demand for the product. The storage location can order inventory from the supplier. Each time it orders it pays an ordering cost. The storage location also pays a holding cost for any inventory left at the end of each time period. We want to find the best way to order inventory into the storage location. We consider a problem over 26 periods (this would be 6 months if each period represents weekly demand).</p><p>The problem is modeled and solved as shown below.</p><pre><code class="language-julia hljs">using HiGHS
+using JuMP
+using SupplyChainOptimization
+
+Seattle = Location(47.608013, -122.335167)
+
+sc = SupplyChain(26)
+
+ordering_cost = 100
+
+product = Product(&quot;Product 1&quot;; unit_holding_cost=0.01)
+add_product!(sc, product)
+
+supplier = Supplier(&quot;Supplier 1&quot;, Seattle)
+add_product!(supplier, product; unit_cost=0.0)
+add_supplier!(sc, supplier)
+
+storage = Storage(&quot;Storage 1&quot;, Seattle;
+            fixed_cost= 0,
+            initial_opened=true)
+add_product!(storage, product; additional_stock_cover=0, initial_inventory=nothing)
+add_storage!(sc, storage)
+
+customer = Customer(&quot;Customer 1&quot;, Seattle)
+add_customer!(sc, customer)
+add_demand!(sc, customer, product; demand=[100.0 for i in 1:sc.horizon])
+
+lane = Lane(supplier, storage; minimum_quantity=1.0)
+add_lane!(sc, lane)
+add_lane!(sc, Lane(storage, customer; minimum_quantity=1.0))
+
+SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
+@objective(sc.optimization_model, Min, sum(sc.optimization_model[:used][lane, t] * ordering_cost for t in 1:sc.horizon) +
+                                       sum(sc.optimization_model[:stored_at_start][product, storage, t] * product.unit_holding_cost for t in 1:sc.horizon) )
+SupplyChainOptimization.optimize_network_optimization_model!(sc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0%   13986190.19234  87742807.66221    84.06%     6826    579      0       965     1.4s
+ S       0       0         0   0.00%   14418422.4637   85008430.43182    83.04%     7630    639      0      1029     1.5s
+ S       0       0         0   0.00%   16837933.55554  84017694.58994    79.96%    10286    814      0      1232     2.1s
+ S       0       0         0   0.00%   18744288.32916  81462972.44722    76.99%    11029    930      0      1373     2.6s
+ S       0       0         0   0.00%   22834970.49606  81425114.01991    71.96%    11610   1497      0      2071     5.0s
+ S       0       0         0   0.00%   24078802.3765   77187311.06536    68.80%    11967   1705      0      2344     6.3s
+ S       0       0         0   0.00%   24171078.12954  74941704.73423    67.75%    11470   1726      0      2371     6.5s
+ S       0       0         0   0.00%   24225871.102    71458535.85262    66.10%    11809   1743      0      2394     6.6s
+ S       0       0         0   0.00%   24589023.79534  60473164.42502    59.34%    11949   1850      0      2575     7.1s
+ S       0       0         0   0.00%   24758957.1321   55874286.90037    55.69%    12103   1892      0      2659     7.6s
+ S       0       0         0   0.00%   24783884.94637  53465052.41444    53.64%    10846   1897      0      2700     7.7s
+ S       0       0         0   0.00%   25512735.12634  34884898.60282    26.87%    11854   2009      0      2992     9.0s
+
+        Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work
+     Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+ L       0       0         0   0.00%   25583793.79267  25592017.83734     0.03%    11977   2015      0      3114     9.8s
+
+Solving report
+  Status            Optimal
+  Primal bound      25592017.8373
+  Dual bound        25592017.8373
+  Solution status   feasible
+                    25592017.8373 (objective)
+                    3.25931839279e-17 (bound viol.)
+                    3.25931839279e-17 (int. viol.)
+                    1.86264514923e-09 (row viol.)
+  Timing            10.52 (total)
+                    0.12 (presolve)
+                    0.00 (postsolve)
+  Nodes             1
+  LP iterations     3411 (total)
+                    34 (strong br.)
+                    2712 (separation)
+                    233 (heuristics)
+
+Presolving model
+79 rows, 79 cols, 184 nonzeros
+53 rows, 53 cols, 157 nonzeros
+51 rows, 52 cols, 153 nonzeros
+
+Solving MIP model with:
+   51 rows
+   52 cols (26 binary, 0 integer, 0 implied int., 26 continuous)
+   153 nonzeros
+
+( 0.0s) Starting symmetry detection
+( 0.0s) No symmetry present
+
+Solving root node LP relaxation
+
+        Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work
+     Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   2.6             inf                  inf        0      0      0        26     0.0s
+ R       0       0         0   0.00%   28.574          425               93.28%       26     26      0        52     0.0s
+ L       0       0         0   0.00%   345.6227666     356                2.91%      435     53      0       261     0.1s
+ B       0       0         0   0.00%   345.6227666     356                2.91%      388     35      0       408     0.2s
+ B      41       5        17  87.05%   346.4678911     356                2.68%      330     43     32      3439     0.3s
+ T      54       3        26  87.38%   346.4678911     356                2.68%      283     49     37      4488     0.3s
+
+Solving report
+  Status            Optimal
+  Primal bound      356
+  Dual bound        356
+  Solution status   feasible
+                    356 (objective)
+                    1.72803993337e-11 (bound viol.)
+                    1.25055521494e-14 (int. viol.)
+                    1.2332748156e-09 (row viol.)
+  Timing            0.57 (total)
+                    0.00 (presolve)</code></pre><p>Once solve we can display the inventory at the storage location.</p><pre><code class="nohighlight hljs">plot_inventory(sc, storage, product)</code></pre><p><img src="../assets/inventory_movements.png" alt="inventory_movements"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../adding special constraints/">« Adding Special Constraints</a><a class="docs-footer-nextpage" href="../optimization model/">Optimization Model »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:40">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
