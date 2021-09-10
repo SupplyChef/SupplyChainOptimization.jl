@@ -1,12 +1,11 @@
 import Pkg; 
 Pkg.add("CSV")
 Pkg.add("DataFrames")
+Pkg.add("JuMP")
+Pkg.add("HiGHS")
 
 using Documenter
 using SupplyChainOptimization
-
-using  CSV
-using  DataFrames
 
 makedocs(
     sitename = "SupplyChainOptimization",
@@ -22,4 +21,5 @@ makedocs(
 
 deploydocs(;
     repo="https://github.com/SupplyChef/SupplyChainOptimization.jl",
+    devbranch = "main"
 )
