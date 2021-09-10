@@ -124,11 +124,17 @@ function is_closing(supply_chain::SupplyChain, storage::Storage, period=1)
     return value(supply_chain.optimization_model[:closing][storage, period]) ≈ 1.0
 end
 
+"""
+Gets the inventory of a product stored at the start of a period.
+"""
 function get_inventory_at_start(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
     check(supply_chain)
     return value(supply_chain.optimization_model[:stored_at_start][product, storage, period]) 
 end
 
+"""
+Gets the inventory of a product stored at the end of a period.
+"""
 function get_inventory_at_end(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
     check(supply_chain)
     return value(supply_chain.optimization_model[:stored_at_end][product, storage, period]) 

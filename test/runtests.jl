@@ -238,7 +238,6 @@ end
 @test begin
     sc = create_test_model()
     SupplyChainOptimization.optimize_network!(sc)
-    all(is_opened(sc, storage) for storage in sc.storages) == 1 &&
     get_total_costs(sc) == 1100 &&
     get_total_fixed_costs(sc) == 1000 &&
     get_total_transportation_costs(sc) == 100
@@ -250,7 +249,9 @@ end
     get_shipments(sc, first(sc.storages), first(sc.products)) == 100 &&
     is_opened(sc, first(sc.storages)) &&
     !is_opening(sc, first(sc.storages)) &&
-    !is_closing(sc, first(sc.storages))
+    !is_closing(sc, first(sc.storages)) &&
+    get_inventory_at_start(sc, first(sc.storages), first(sc.products), 1) == 100 &&
+    get_inventory_at_end(sc, first(sc.storages), first(sc.products), 1) == 0
 end
 
 @test begin
@@ -277,19 +278,22 @@ end
 @test begin
     sc, product, supplier = create_test_model2()
     SupplyChainOptimization.optimize_network!(sc)
-    get_total_costs(sc) == 1000 + 500 + 200 && value.(sc.optimization_model[:bought])[product, supplier, 1] == 100
+    get_total_costs(sc) == 1000 + 500 + 200 && 
+    get_shipments(sc, supplier, product, 1) == 100
 end
 
 @test begin
     sc, product, plant = create_test_model3()
     SupplyChainOptimization.optimize_network!(sc)
-    get_total_costs(sc) == 3300 && get_production(sc, plant, product, 1) == 100
+    get_total_costs(sc) == 3300 && 
+    get_production(sc, plant, product, 1) == 100
 end
 
 @test begin
     sc, product2, plant = create_test_model4()
     SupplyChainOptimization.optimize_network!(sc)
-    get_total_costs(sc) == 3400 && get_production(sc, plant, product2, 1) == 100
+    get_total_costs(sc) == 3400 && 
+    get_production(sc, plant, product2, 1) == 100
 end
 
 @test begin
