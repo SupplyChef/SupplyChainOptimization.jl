@@ -12,6 +12,7 @@ Seattle = Location(47.608013, -122.335167)
 include("UnitTests.jl")
 
 function create_test_model()
+    #storage -> customer
     sc = SupplyChain()
 
     product = Product("p1")
@@ -21,7 +22,7 @@ function create_test_model()
     add_customer!(sc, c)
     add_demand!(sc, c, product; demand=[100.0])
     
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=0.0, closing_cost=0.0, initial_opened=true)
+    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
     add_storage!(sc, storage)
     add_product!(storage, product; initial_inventory=100)
     
@@ -241,6 +242,15 @@ end
     get_total_costs(sc) == 1100 &&
     get_total_fixed_costs(sc) == 1000 &&
     get_total_transportation_costs(sc) == 100
+end
+
+@test begin
+    sc = create_test_model()
+    SupplyChainOptimization.optimize_network!(sc)
+    get_shipments(sc, first(sc.storages), first(sc.products)) == 100 &&
+    is_opened(sc, first(sc.storages)) &&
+    !is_opening(sc, first(sc.storages)) &&
+    !is_closing(sc, first(sc.storages))
 end
 
 @test begin
