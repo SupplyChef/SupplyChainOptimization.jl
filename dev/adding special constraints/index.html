@@ -5,7 +5,7 @@
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,2]) == 1)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,3]) == 1)
 
-SupplyChainOptimization.optimize_network_optimization_model!(sc)</code></pre><p>In the first period we allow two opening (we need at least a plant and a storage location). In the subsequent periods, we allow one opening per period. A list of available variables in the optimization model is provided in the <a href="../optimization model/#Optimization-Model">Optimization Model</a> section.</p><p>The full code is as below. Notice the use of JuMP, the optimization library, to add the additional constraints.</p><pre><code class="language-julia hljs">using CSV
+SupplyChainOptimization.optimize_network_optimization_model!(sc)</code></pre><p>In the first period we allow two opening (we need at least a plant and a storage location). In the subsequent periods, we allow one opening per period. A list of available variables in the optimization model is provided in the <a href="../optimization model/#Optimization-Model">Optimization Model</a> section.</p><p>The full code is as below. Notice the use of JuMP, the optimization library, to add the additional constraints.</p><pre><code class="nohighlight hljs">using CSV
 using DataFrames
 using JuMP
 using HiGHS
@@ -34,16 +34,16 @@ for r in eachrow(first(us_cities, 10))
 end
 
 for r in eachrow(first(us_cities, 10))
-    plant = Plant(&quot;Plant $(r.name)&quot;, Location(r.lat - 0.2, r.lon - 0.2, r.name);
-            fixed_cost= 6_000_000 + r.pop / 2,
+    plant = Plant(&quot;Plant $(r.name)&quot;, Location(r.lat - 0.2, r.lon - 0.2, r.name); 
+            fixed_cost= 6_000_000 + r.pop / 2, 
             initial_opened=false)
     add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 =&gt; 1.0), unit_cost=1.0)
     add_plant!(sc, plant)
 end
 
 for r in eachrow(first(us_cities, 10))
-    storage = Storage(&quot;Storage $(r.name)&quot;, Location(r.lat + 0.2, r.lon + 0.2, r.name);
-            fixed_cost= 2_000_000 + r.pop / 2,
+    storage = Storage(&quot;Storage $(r.name)&quot;, Location(r.lat + 0.2, r.lon + 0.2, r.name); 
+            fixed_cost= 2_000_000 + r.pop / 2, 
             initial_opened=false)
     add_product!(storage, product2; initial_inventory=0)
     add_storage!(sc, storage)
@@ -73,4 +73,4 @@ SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,2]) == 1)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,3]) == 1)
 
-SupplyChainOptimization.optimize_network_optimization_model!(sc)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../multi-period optimization/">« Multi-period Optimization</a><a class="docs-footer-nextpage" href="../inventory movements/">Inventory Movements »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Friday 10 September 2021 19:43">Friday 10 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+SupplyChainOptimization.optimize_network_optimization_model!(sc)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../multi-period optimization/">« Multi-period Optimization</a><a class="docs-footer-nextpage" href="../inventory movements/">Inventory Movements »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Saturday 11 September 2021 07:22">Saturday 11 September 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
