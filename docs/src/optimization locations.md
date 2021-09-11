@@ -1,7 +1,7 @@
 # Locations Optimization
 In this section we will see how to find the best network to service customer demand. We will consider a set of 40 possible storage locations and a set of 350 customers both distributed throughout the US. We specify the cost of operating each storage location and the cost of shipping the product from each storage location to each customer. Finally we indicate the demand for each customer. Once this is done we optimize the network.
 
-```@example continue=true
+```
 using CSV
 using DataFrames
 using SupplyChainOptimization
@@ -44,7 +44,7 @@ optimize_network!(sc)
 
 After optimizing the network we can visualize the results.
 
-```@example
+```
 plot_flows(sc; showlegend=false)
 ```
 
@@ -54,7 +54,7 @@ In the next example, we optimize a more complete network: we will consider where
 
 The process is similar to the previous example: we setup the network using the built-in concepts, call the optimize_network! function and query the results. 
 
-```@example
+```
 using CSV
 using DataFrames
 using SupplyChainOptimization

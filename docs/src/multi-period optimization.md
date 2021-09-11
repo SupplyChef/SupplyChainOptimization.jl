@@ -65,7 +65,6 @@ for c in sc.customers, s in sc.storages
 end
 
 optimize_network!(sc, Cbc.Optimizer)
-
 ```
 
 The results show the network evolving in three phases:

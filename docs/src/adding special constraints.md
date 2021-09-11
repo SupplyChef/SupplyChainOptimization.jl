@@ -25,7 +25,7 @@ In the first period we allow two opening (we need at least a plant and a storage
 
 The full code is as below. Notice the use of JuMP, the optimization library, to add the additional constraints.
 
-```@example
+```
 using CSV
 using DataFrames
 using JuMP
@@ -95,5 +95,4 @@ SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,3]) == 1)
 
 SupplyChainOptimization.optimize_network_optimization_model!(sc)
-
 ```

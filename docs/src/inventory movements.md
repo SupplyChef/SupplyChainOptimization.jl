@@ -5,7 +5,7 @@ We will consider a simple network with one supplier, one storage location, one c
 
 The problem is modeled and solved as shown below.
 
-```@example continue=true
+```
 using HiGHS
 using JuMP
 using SupplyChainOptimization
@@ -41,7 +41,6 @@ SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
 @objective(sc.optimization_model, Min, sum(sc.optimization_model[:used][lane, t] * ordering_cost for t in 1:sc.horizon) +
                                        sum(sc.optimization_model[:stored_at_start][product, storage, t] * product.unit_holding_cost for t in 1:sc.horizon) )
 SupplyChainOptimization.optimize_network_optimization_model!(sc)
-
 ```
 
 Once solve we can display the inventory at the storage location.

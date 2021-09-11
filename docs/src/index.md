@@ -30,7 +30,7 @@ In the example below we search for the best storage locations to use to supply a
 US cities. Then we create one product, a set of 40 possible storage locations and a set of 350 customers both distributed throughout the US.
 We specify the cost of operating each storage location and the cost of shipping the product from each storage location to each customer. Finally we indicate the demand for each customer. Once this is done we optimize the network.
 
-```@example continue=true
+```
 using CSV
 using DataFrames
 using SupplyChainOptimization
@@ -73,7 +73,7 @@ optimize_network!(sc)
 
 After optimizing the network we can visualize the results.
 
-```@example
+```
 plot_flows(sc; showlegend=false)
 ```
 
