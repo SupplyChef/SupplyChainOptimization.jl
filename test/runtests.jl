@@ -2,7 +2,6 @@ using Base: product
 using SupplyChainOptimization
 #using Cbc
 using JuMP
-using MathOptInterface
 using Test
 
 include("UFLlib.jl")
@@ -308,7 +307,7 @@ end
         sc, product2, plant = create_test_infeasible_model()
         SupplyChainOptimization.optimize_network!(sc)
         status = termination_status(sc.optimization_model)
-        status == MathOptInterface.INFEASIBLE
+        status == JuMP.MathOptInterface.INFEASIBLE
     end
 end
 
