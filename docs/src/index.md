@@ -1,6 +1,6 @@
 # SupplyChainOptimization.jl
 
-SupplyChainOptimization.jl is a package for the modeling and optimizing supply chains. 
+SupplyChainOptimization.jl is a package for modeling and optimizing supply chains. 
 
 ## Installation
 
