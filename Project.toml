@@ -10,3 +10,11 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Cbc = "0.8.1"
+HiGHS = "0.2.3"
+JuMP = "0.21.10"
+MathOptInterface = "0.10.1"
+PlotlyJS = "0.18.7"
+julia = "1.6"
