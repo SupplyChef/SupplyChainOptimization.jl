@@ -53,6 +53,15 @@ function get_demand(supply_chain, customer, product, time)
     return 0
 end
 
+function get_service_level(supply_chain, customer, product)
+    for demand in supply_chain.demand
+        if demand.customer == customer && demand.product == product
+            return demand.service_level
+        end
+    end
+    return 1.0
+end
+
 function get_lanes_in(supply_chain, node)
     if(haskey(supply_chain.lanes_in, node))
         return supply_chain.lanes_in[node]
@@ -163,6 +172,8 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
 
     #@variable(m, serviced_by[products, storages, customers, times], Bin)
 
+    @variable(m, lost_sales[products, customers, times] >= 0)
+
     @variable(m, bought[products, suppliers, times] >= 0)
 
     @variable(m, produced[products, plants, times] >= 0)
@@ -229,7 +240,9 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @constraint(m, [p=products, s=plants, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
     @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products) == sum(received[p, l, t] for l in get_lanes_in(supply_chain, s)))
 
-    @constraint(m, [p=products, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c)) == get_demand(supply_chain, c, p, t))
+    @constraint(m, [p=products, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c)) == get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])
+
+    @constraint(m, [p=products, c=customers], sum(lost_sales[p, c, t] for t in times) <= (1 - get_service_level(supply_chain, c, p)) * sum(get_demand(supply_chain, c, p, t) for t in times))
 
     @constraint(m, [t=times], total_transportation_costs_per_period[t] == sum(sent[p, l, t] * l.unit_cost for p in products, l in lanes))
     @constraint(m, total_transportation_costs == sum(total_transportation_costs_per_period[t] for t in times))
@@ -255,7 +268,6 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
 
     return m
 end
-
 
 """
 Computes the great circle distance between two locations. The distance is expressed in meter.

@@ -10,7 +10,7 @@ Seattle = Location(47.608013, -122.335167)
 
 include("UnitTests.jl")
 
-function create_test_model()
+function create_model_storage_customer()
     #storage -> customer
     sc = SupplyChain()
 
@@ -119,8 +119,10 @@ function create_test_model5()
 
     supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
     add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
+
     customer = add_customer!(sc, Customer("c1", Seattle))
     add_demand!(sc, customer, product2; demand=[100.0, 100.0])
+
     storage = add_storage!(sc, Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false))
     add_product!(storage, product2)
     plant = add_plant!(sc, Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false))
@@ -168,6 +170,26 @@ function create_test_model6()
     end
 
     return sc, product2, plant
+end
+
+function create_test_model7()
+    #storage -> customer
+    sc = SupplyChain()
+
+    product = Product("p1")
+    add_product!(sc, product)
+
+    c = Customer("c1", Seattle)
+    add_customer!(sc, c)
+    add_demand!(sc, c, product; demand=[100.0], service_level=0.0)
+    
+    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
+    add_storage!(sc, storage)
+    add_product!(storage, product; initial_inventory=100)
+    
+    add_lane!(sc, Lane(storage, c; unit_cost=1.0))
+
+    return sc
 end
 
 function create_test_broken_model()
@@ -232,19 +254,21 @@ end
 
 @testset "Happy Path" begin
                               
-@test !isnothing(create_test_model())
+@test !isnothing(create_model_storage_customer())
 
 @test begin
-    sc = create_test_model()
+    sc = create_model_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
+
     get_total_costs(sc) == 1100 &&
     get_total_fixed_costs(sc) == 1000 &&
     get_total_transportation_costs(sc) == 100
 end
 
 @test begin
-    sc = create_test_model()
+    sc = create_model_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
+
     get_shipments(sc, first(sc.storages), first(sc.products)) == 100 &&
     is_opened(sc, first(sc.storages)) &&
     !is_opening(sc, first(sc.storages)) &&
@@ -254,21 +278,21 @@ end
 end
 
 @test begin
-    sc = create_test_model()
+    sc = create_model_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
     plot_costs(sc)
     true
 end
 
 @test begin
-    sc = create_test_model()
+    sc = create_model_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
     plot_flows(sc)
     true
 end
 
 @test begin
-    sc = create_test_model()
+    sc = create_model_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
     plot_network(sc)
     true
@@ -299,6 +323,12 @@ end
     sc, product2, plant = create_test_model5()
     SupplyChainOptimization.optimize_network!(sc)
     get_total_costs(sc) == 1500 + 3000 + 600 + 200 && get_production(sc, plant, product2, 1)  == 200
+end
+
+@test begin
+    sc = create_test_model7()
+    SupplyChainOptimization.optimize_network!(sc)
+    get_total_costs(sc) == 10
 end
 end
 

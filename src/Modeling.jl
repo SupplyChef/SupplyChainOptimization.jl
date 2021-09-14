@@ -116,7 +116,7 @@ The keyword arguments are:
  - `maximum_throughput`: the maximum number of units that can be provided in each time period.
 
 """
-function add_product!(supplier::Supplier, product; unit_cost::Float64, maximum_throughput::Float64=Inf)
+function add_product!(supplier::Supplier, product; unit_cost::Real, maximum_throughput::Real=Inf)
     supplier.unit_cost[product] = unit_cost
     supplier.maximum_throughput[product] = maximum_throughput
 end
@@ -196,7 +196,7 @@ struct Plant <: Node
     """
     Creates a new plant.
     """
-    function Plant(name::String, location::Location; fixed_cost::Float64=0.0, opening_cost::Float64=0.0, closing_cost::Float64=Inf, initial_opened::Bool=true)
+    function Plant(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, initial_opened::Bool=true)
         return new(name, fixed_cost, opening_cost, closing_cost, initial_opened, Dict{Product, Dict{Product, Float64}}(), Dict{Product, Float64}(), Dict{Product, Float64}(), location)
     end
 end
@@ -230,9 +230,10 @@ struct Demand
     product::Product
     probability::Float64
     demand::Array{Float64, 1}
+    service_level::Float64
 
-    function Demand(customer::Customer, product::Product, demand::Array{Float64, 1})
-        return new(customer, product, 1.0, demand)
+    function Demand(customer::Customer, product::Product, demand::Array{Float64, 1}, service_level)
+        return new(customer, product, 1.0, demand, service_level)
     end
 end
 
@@ -274,12 +275,16 @@ mutable struct SupplyChain
 end
 
 """
-    add_demand!(supply_chain, customer, product; demand::Array{Float64, 1})
+    add_demand!(supply_chain, customer, product; demand::Array{Float64, 1}, service_level=1.0)
 
 Adds customer demand for a product. The demand is specified for each time period.
+The service level indicates how many lost sales are allowed as a ratio of demand. No demand can be lost if the service level is 1.0 and all demand can be lost if the service level is 0.0. 
 """
-function add_demand!(supply_chain, customer, product; demand::Array{Float64, 1})
-    add_demand!(supply_chain, Demand(customer, product, demand))
+function add_demand!(supply_chain, customer, product; demand::Array{Float64, 1}, service_level=1.0)
+    if service_level < 0.0 || service_level > 1.0
+        throw(DomainError("service_level must be between 0.0 and 1.0 inclusive"))
+    end
+    add_demand!(supply_chain, Demand(customer, product, demand, service_level))
 end
 
 """
