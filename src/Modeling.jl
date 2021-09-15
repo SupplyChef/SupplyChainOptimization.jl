@@ -188,6 +188,7 @@ struct Plant <: Node
 
     bill_of_material::Dict{Product, Dict{Product, Float64}}
     unit_cost::Dict{Product, Float64}
+    time::Dict{Product, Int}
 
     maximum_throughput::Dict{Product, Float64}
     
@@ -197,7 +198,7 @@ struct Plant <: Node
     Creates a new plant.
     """
     function Plant(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, initial_opened::Bool=true)
-        return new(name, fixed_cost, opening_cost, closing_cost, initial_opened, Dict{Product, Dict{Product, Float64}}(), Dict{Product, Float64}(), Dict{Product, Float64}(), location)
+        return new(name, fixed_cost, opening_cost, closing_cost, initial_opened, Dict{Product, Dict{Product, Float64}}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), location)
     end
 end
 
@@ -210,12 +211,14 @@ The keyword arguments are:
  - `bill_of_material`: the amount of other product needed to produce one unit of the product. This dictionary can be empty if there are no other products needed.
  - `unit_cost`: the cost of producing one unit of product.
  - `maximum_throughput`: the maximum amount of product that can be produced in a time period.
+ - `time`: the production lead time.
 
 """
-function add_product!(plant::Plant, product; bill_of_material::Dict{Product, Float64}, unit_cost, maximum_throughput::Float64=Inf)
+function add_product!(plant::Plant, product; bill_of_material::Dict{Product, Float64}, unit_cost, maximum_throughput::Real=Inf, time::Int=0)
     plant.bill_of_material[product] = bill_of_material
     plant.unit_cost[product] = unit_cost
     plant.maximum_throughput[product] = maximum_throughput
+    plant.time[product] = time
 end
 
 Base.:(==)(x::Plant, y::Plant) = x.name == y.name 
@@ -278,7 +281,11 @@ end
     add_demand!(supply_chain, customer, product; demand::Array{Float64, 1}, service_level=1.0)
 
 Adds customer demand for a product. The demand is specified for each time period.
-The service level indicates how many lost sales are allowed as a ratio of demand. No demand can be lost if the service level is 1.0 and all demand can be lost if the service level is 0.0. 
+
+The keyword arguments are:
+ - `demand`: the amount of product demanded for each time period.
+ - `service_level`: indicates how many lost sales are allowed as a ratio of demand. No demand can be lost if the service level is 1.0 and all demand can be lost if the service level is 0.0. 
+
 """
 function add_demand!(supply_chain, customer, product; demand::Array{Float64, 1}, service_level=1.0)
     if service_level < 0.0 || service_level > 1.0

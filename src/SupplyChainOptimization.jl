@@ -236,7 +236,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     #@constraint(m, [p=products, s=plants, t=times], closed[s, t] => { produced[p, s, t] == 0 })
     @constraint(m, [p=products, s=plants, t=times], produced[p, s, t] <= bigM * opened[s, t])
     @constraint(m, [p=products, s=plants, t=times; !haskey(s.bill_of_material, p)], produced[p, s, t] == 0)
-    @constraint(m, [p=products, s=plants, t=times], produced[p, s, t] == sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)))
+    @constraint(m, [p=products, s=plants, t=times; haskey(s.time, p) && (t + s.time[p] <= supply_chain.horizon)], produced[p, s, t] == sum(sent[p, l, t + s.time[p]] for l in get_lanes_out(supply_chain, s)))
     @constraint(m, [p=products, s=plants, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
     @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products) == sum(received[p, l, t] for l in get_lanes_in(supply_chain, s)))
 
