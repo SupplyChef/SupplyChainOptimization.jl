@@ -6,6 +6,6 @@
 
 SupplyChainOptimization.jl is a package for modeling and optimizing supply chains. 
 
-Use built-in constructs to easily model your supply chain and use power solvers to optimize it.
+Use built-in constructs to easily model your supply chain and use powerful solvers to optimize it.
 
 Learn more by reading the [documentation](https://SupplyChef.github.io/SupplyChainOptimization.jl/dev).
