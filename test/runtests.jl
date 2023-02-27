@@ -337,7 +337,7 @@ end
         sc, product2, plant = create_test_infeasible_model()
         SupplyChainOptimization.optimize_network!(sc)
         status = termination_status(sc.optimization_model)
-        status == JuMP.MathOptInterface.INFEASIBLE
+        status == JuMP.INFEASIBLE
     end
 end
 

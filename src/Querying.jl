@@ -142,7 +142,7 @@ end
 
 function check(supply_chain)
     if isnothing(supply_chain.optimization_model) || 
-        !((termination_status(supply_chain.optimization_model) == JuMP.MathOptInterface.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.MathOptInterface.FEASIBLE_POINT))
+        !((termination_status(supply_chain.optimization_model) == JuMP.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.FEASIBLE_POINT))
         throw(ErrorException("The optimize_network! function must be called first."))
     end
 end
