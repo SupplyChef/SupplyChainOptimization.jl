@@ -222,7 +222,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @constraint(m, [s=plants_storages, t=times; t > 1], closing[s, t] <= 1 - opened[s, t])
     @constraint(m, [s=plants_storages, t=times; t > 1], closing[s, t] <= opened[s, t-1])
 
-    @constraint(m, [s=plants_storages, t=times; isinf(s.opening_cost)], opending[s, t] == 0)
+    @constraint(m, [s=plants_storages, t=times; isinf(s.opening_cost)], opening[s, t] == 0)
     @constraint(m, [s=plants_storages, t=times; isinf(s.closing_cost)], closing[s, t] == 0)
 
     @constraint(m, [p=products, s=storages, t=times], stored_at_end[p, s, t] == stored_at_start[p, s, t] 
