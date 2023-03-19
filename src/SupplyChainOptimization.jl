@@ -122,7 +122,7 @@ Optimizes the supply chain.
 """
 function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer)
     create_network_optimization_model!(supply_chain, optimizer)
-    set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
+    #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
     optimize_network_optimization_model!(supply_chain)
 end
 
@@ -157,6 +157,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     lanes = supply_chain.lanes
 
     m = Model(optimizer)#; bridge_constraints = false)
+    set_string_names_on_creation(m, false)
 
     @variable(m, total_costs >= 0)
     @variable(m, total_transportation_costs >= 0)
@@ -202,6 +203,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
 
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= bigM * opened[s, t])
+    @constraint(m, [p=products, s=storages, c=customers, t=times], sum(sent[p, l, t] for l in filter(l -> l.destination == c, get_lanes_out(supply_chain, s))) <= get_demand(supply_chain, c, p, t) * opened[s, t])
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])

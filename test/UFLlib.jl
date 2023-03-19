@@ -52,7 +52,7 @@ function parse_orlib_data_uncap(file_name)
     for f in 1:facility_count
         number_index += 1
         #println(numbers[number_index])
-        storage = Storage("s$f", Location(0, 0); fixed_cost=parse(Float64, numbers[number_index]), opening_cost=0.0, closing_cost=0.0, initial_opened=false)
+        storage = Storage("s$f", Location(0, 0); fixed_cost=parse(Float64, numbers[number_index]), opening_cost=0.0, closing_cost=Inf, initial_opened=false)
         number_index += 1
         add_product!(storage, product; initial_inventory=customer_count, unit_handling_cost=0.0)
         add_storage!(sc, storage)
@@ -117,7 +117,7 @@ function parse_orlib_data_cap(file_name, capacity=nothing)
 
         for f in 1:facility_count
             #println(numbers[number_index])
-            lane = Lane(facilities[f], customer, parse(Float64, numbers[number_index]) / customer.demand[product][1])
+            lane = Lane(facilities[f], customer; unit_cost=parse(Float64, numbers[number_index]) / demand)
             number_index += 1
             add_lane!(sc, lane)
         end
@@ -129,11 +129,62 @@ end
 @test begin
     sc = parse_simple_data(raw"..\data\BildeKrarup\B\B1.1")
     SupplyChainOptimization.optimize_network!(sc)
-    true
+    println("$(get_total_costs(sc)) == 23468")
+    get_total_costs(sc) ≈ 23468
 end
 
 @test begin
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\40\cap41.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    true
+    println("$(get_total_costs(sc)) == 932615.75")
+    get_total_costs(sc) ≈ 932615.75
+end
+
+@test begin
+    sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-cap\40\cap41.txt")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) == 1040444.375")
+    get_total_costs(sc) ≈ 1040444.375
+end
+
+@test begin
+    sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\90\cap91.txt")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) ==  796648.4375")
+    get_total_costs(sc) ≈ 796648.4375
+end
+
+@test begin
+    sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-cap\90\cap91.txt")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) ==  796648.438")
+    get_total_costs(sc) ≈ 796648.438
+end
+
+@test begin
+    sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capa.txt")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) == 17156454.47830")
+    get_total_costs(sc) ≈ 17156454.47830
+end
+
+# @test begin
+#     sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capa.txt", 8000)
+#     SupplyChainOptimization.optimize_network!(sc)
+#     println("$(get_total_costs(sc)) == 19240822.449")
+#     get_total_costs(sc) ≈ 19240822.449
+# end
+
+@test begin
+    sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capb.txt")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) == 12979071.58143")
+    get_total_costs(sc) ≈ 12979071.58143
+end
+
+@test begin
+    sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capb.txt", 8000)
+    SupplyChainOptimization.optimize_network!(sc)
+    println("$(get_total_costs(sc)) == 13082516.496")
+    get_total_costs(sc) ≈ 13082516.496
 end
