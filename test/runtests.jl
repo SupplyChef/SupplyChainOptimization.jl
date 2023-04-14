@@ -4,253 +4,12 @@ using SupplyChainOptimization
 using JuMP
 using Test
 
-include("UFLlib.jl")
+include("Models.jl")
 
-Seattle = Location(47.608013, -122.335167)
+include("Inventory.jl")
+#include("UFLlib.jl")
 
 include("UnitTests.jl")
-
-function create_model_storage_customer()
-    #storage -> customer
-    sc = SupplyChain()
-
-    product = Product("p1")
-    add_product!(sc, product)
-
-    c = Customer("c1", Seattle)
-    add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0])
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
-    add_storage!(sc, storage)
-    add_product!(storage, product; initial_inventory=100)
-    
-    add_lane!(sc, Lane(storage, c; unit_cost=1.0))
-
-    return sc
-end
-
-function create_test_model2()
-    #supplier -> storage -> customer
-    sc = SupplyChain()
-
-    product = Product("p1")
-    add_product!(sc, product)
-
-    c = Customer("c1", Seattle)
-    add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0])
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_storage!(sc, storage)
-    add_product!(storage, product)
-    
-    supplier = Supplier("supplier1", Seattle)
-    add_supplier!(sc, supplier)
-    add_product!(supplier, product; unit_cost=0.0, maximum_throughput=Inf)
-    
-    add_lane!(sc, Lane(storage, c; unit_cost=1.0))
-    add_lane!(sc, Lane(supplier, storage; unit_cost=1.0))
-
-    return sc, product, supplier
-end
-
-function create_test_model3()
-    #plant -> storage -> customer
-    sc = SupplyChain()
-
-    product = Product("p1")
-    add_product!(sc, product)
-    
-    customer = Customer("c1", Seattle)
-    add_customer!(sc, customer)
-    add_demand!(sc, customer, product; demand=[100.0])
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_storage!(sc, storage)
-    add_product!(storage, product)
-    
-    plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_plant!(sc, plant)
-    add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
-    
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-
-    return sc, product, plant
-end
-
-function create_test_model4()
-    #supplier -> plant -> storage -> customer
-    sc = SupplyChain()
-
-    product1 = add_product!(sc, Product("p1"))
-    product2 = add_product!(sc, Product("p2"))
-
-    supplier = Supplier("supplier1", Seattle)
-    add_supplier!(sc, supplier)
-    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
-    
-    customer = Customer("c1", Seattle)
-    add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0])
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_storage!(sc, storage)
-    add_product!(storage, product2)
-    
-    plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_plant!(sc, plant)
-    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
-    
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-    add_lane!(sc, Lane(supplier, plant; unit_cost=1.0))
-
-    return sc, product2, plant
-end
-
-function create_test_model5()
-    #supplier -> plant -> storage -> customer
-    sc = SupplyChain(2)
-
-    product1 = add_product!(sc, Product("p1"))
-    product2 = add_product!(sc, Product("p2"))
-
-    supplier = add_supplier!(sc, Supplier("supplier1", Seattle))
-    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
-
-    customer = add_customer!(sc, Customer("c1", Seattle))
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
-
-    storage = add_storage!(sc, Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false))
-    add_product!(storage, product2)
-    plant = add_plant!(sc, Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false))
-    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-    add_lane!(sc, Lane(supplier, plant; unit_cost=1.0))
-
-    return sc, product2, plant
-end
-
-function create_test_model6()
-    #supplier -> plant -> storage -> customer
-    sc = SupplyChain(2)
-
-    product1 = Product("p1")
-    product2 = Product("p2")
-    add_product!(sc, product1)
-    add_product!(sc, product2)
-
-    supplier = Supplier("supplier1", Seattle)
-    add_supplier!(sc, supplier)
-    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
-
-    plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_plant!(sc, plant)
-    add_product!(plant, product2; bill_of_material=Dict{Product, Float64}(product1 => 1), unit_cost=1, maximum_throughput=Inf)
-    add_lane!(sc, Lane(supplier, plant; unit_cost=1.0))
-
-    for i in 1:500
-        customer = Customer("c$i", Seattle)
-        add_customer!(sc, customer)
-        add_demand!(sc, customer, product2; demand=[100.0, 100.0])
-    end 
-
-    for i in 1:50
-        storage = Storage("s$i", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-        add_storage!(sc, storage)
-        add_product!(storage, product2)
-        add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-    end
-
-    for customer in sc.customers, storage in sc.storages
-        add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    end
-
-    return sc, product2, plant
-end
-
-function create_test_model7()
-    #storage -> customer
-    sc = SupplyChain()
-
-    product = Product("p1")
-    add_product!(sc, product)
-
-    c = Customer("c1", Seattle)
-    add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0], service_level=0.0)
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
-    add_storage!(sc, storage)
-    add_product!(storage, product; initial_inventory=100)
-    
-    add_lane!(sc, Lane(storage, c; unit_cost=1.0))
-
-    return sc
-end
-
-function create_test_broken_model()
-    #supplier -> plant -> storage -> customer
-    sc = SupplyChain(2)
-
-    product1 = Product("p1")
-    product2 = Product("p2")
-    add_product!(sc, product1)
-    add_product!(sc, product2)
-
-    supplier = Supplier("supplier1", Seattle)
-    add_supplier!(sc, supplier)
-    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
-
-    customer = Customer("c1", Seattle)
-    add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
-
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_storage!(sc, storage)
-    add_product!(storage, product2)
-    plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_plant!(sc, plant)
-    
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-    add_lane!(sc, Lane(supplier, plant; unit_cost=1.0))
-
-    return sc, product2, plant
-end
-
-function create_test_infeasible_model()
-    #supplier -> plant -> storage -> customer
-    sc = SupplyChain(2)
-
-    product1 = add_product!(sc, Product("p1"))
-    product2 = add_product!(sc, Product("p2"))
-
-    supplier = Supplier("supplier1", Seattle)
-    add_supplier!(sc, supplier)
-    add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
-    
-    customer = Customer("c1", Seattle)
-    add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
-    
-    storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_storage!(sc, storage)
-    add_product!(storage, product2)
-    
-    plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
-    add_plant!(sc, plant)
-    
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
-    add_lane!(sc, Lane(plant, storage; unit_cost=1.0))
-    add_lane!(sc, Lane(supplier, plant; unit_cost=1.0))
-
-    return sc, product2, plant
-end
-
 
 @testset "Happy Path" begin
                               
@@ -299,17 +58,17 @@ end
 end
 
 @test begin
-    sc, product, supplier = create_test_model2()
+    sc, product, supplier = create_model_supplier_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
     get_total_costs(sc) == 1000 + 500 + 200 && 
     get_shipments(sc, supplier, product, 1) == 100
 end
 
 @test begin
-    sc, product, plant = create_test_model3()
+    sc = create_model_plant_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
-    get_total_costs(sc) == 3300 && 
-    get_production(sc, plant, product, 1) == 100
+    get_total_costs(sc) == 3400 && 
+    get_production(sc, first(sc.plants), first(sc.products), 1) == 100
 end
 
 @test begin
@@ -337,6 +96,9 @@ end
         sc, product2, plant = create_test_infeasible_model()
         SupplyChainOptimization.optimize_network!(sc)
         status = termination_status(sc.optimization_model)
+        #println(status)
+        #println(value.(sc.optimization_model[:produced]))
+        #println(value.(sc.optimization_model[:sent]))
         status == JuMP.INFEASIBLE
     end
 end

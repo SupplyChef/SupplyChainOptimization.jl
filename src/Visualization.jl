@@ -142,7 +142,7 @@ function plot_flows(supply_chain, period=1; geography="usa", showlegend=true)
 
     traces = AbstractTrace[]
     for l in sort(collect(supply_chain.lanes), by=l->string(l.origin.location.name, l.destination.location.name))
-        if sum(get_shipments(supply_chain, l, p, period) for p in supply_chain.products) > 1e-10
+        if sum(get_shipments(supply_chain, l, p, period) for p in supply_chain.products) > 2e-10
             if l.origin in keys(origin_colors)
                 color = origin_colors[l.origin]
             else

@@ -4,7 +4,7 @@ function create_empty_model()
     return sc
 end
 
-@testset "Happy Path" begin
+@testset "Modeling" begin
     @test haversine(0, 0, 0, 0) == 0
     
     @test haversine(51.510357, -0.116773, 38.889931, -77.009003) ≈ 5897658.289

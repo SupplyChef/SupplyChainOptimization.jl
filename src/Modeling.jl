@@ -25,7 +25,7 @@ end
 """
 A product.
 """
-struct Product
+mutable struct Product
     name::String
     unit_holding_cost::Float64
 
@@ -44,15 +44,18 @@ Base.show(io::IO, x::Product) = print(io, x.name)
 """
 A transportation lane between two nodes of the supply chain.
 """
-struct Lane
+mutable struct Lane
     origin::Node
     destination::Node
+    fixed_cost::Float64
     unit_cost::Float64
     minimum_quantity::Float64
     time::Int
+    initial_arrivals::Array{Int64, 1}
+    can_ship::Array{Bool, 1}
 
-    function Lane(origin, destination; unit_cost=0.0, minimum_quantity=0.0, time::Int=0)
-        return new(origin, destination, unit_cost, minimum_quantity, time)
+    function Lane(origin, destination; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=[], can_ship=[])
+        return new(origin, destination, fixed_cost, unit_cost, minimum_quantity, time, initial_arrivals, can_ship)
     end
 end
 
@@ -89,7 +92,7 @@ Base.show(io::IO, x::Customer) = print(io, x.name)
 """
 A supplier.
 """
-struct Supplier <: Node
+mutable struct Supplier <: Node
     name::String
 
     unit_cost::Dict{Product, Float64}
@@ -143,6 +146,8 @@ struct Storage <: Node
 
     maximum_throughput::Dict{Product, Float64}
 
+    maximum_units::Dict{Product, Float64}
+
     additional_stock_cover::Dict{Product, Float64}
 
     location::Location
@@ -155,7 +160,7 @@ struct Storage <: Node
         return new(name,
                    fixed_cost, opening_cost, closing_cost, 
                    initial_opened, 
-                   Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), 
+                   Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), 
                    location)
     end
 end
@@ -257,11 +262,12 @@ mutable struct SupplyChain
     lanes_out::Dict{Node, Array{Lane, 1}}
 
     optimization_model
+    discount_factor
 
     """
     Creates a new supply chain.
     """
-    function SupplyChain(horizon=1)
+    function SupplyChain(horizon=1; discount_factor=1.0)
         sc = new(horizon, 
                  Set{Product}(), 
                  Set{Storage}(),
@@ -272,7 +278,8 @@ mutable struct SupplyChain
                  Set{Demand}(),
                  Dict{Node, Array{Lane, 1}}(), 
                  Dict{Node, Array{Lane, 1}}(),
-                 nothing)
+                 nothing,
+                 discount_factor)
         return sc
     end
 end
@@ -299,7 +306,7 @@ end
 
 Adds demand to the supply chain.
 """
-function add_demand!(supply_chain, demand)
+function add_demand!(supply_chain::SupplyChain, demand)
     push!(supply_chain.demand, demand)
 end
 
@@ -308,7 +315,7 @@ end
 
 Adds a product to the supply chain.
 """
-function add_product!(supply_chain, product)
+function add_product!(supply_chain::SupplyChain, product)
     push!(supply_chain.products, product)
     return product
 end
@@ -318,7 +325,7 @@ end
 
 Adds a customer to the supply chain.
 """
-function add_customer!(supply_chain, customer)
+function add_customer!(supply_chain::SupplyChain, customer)
     push!(supply_chain.customers, customer)
     return customer
 end
@@ -328,7 +335,7 @@ end
 
 Adds a supplier to the supply chain.
 """
-function add_supplier!(supply_chain, supplier)
+function add_supplier!(supply_chain::SupplyChain, supplier)
     push!(supply_chain.suppliers, supplier)
     return supplier
 end
@@ -338,7 +345,7 @@ end
 
 Adds a storage location to the supply chain.
 """
-function add_storage!(supply_chain, storage)
+function add_storage!(supply_chain::SupplyChain, storage)
     push!(supply_chain.storages, storage)
     return storage
 end
@@ -348,7 +355,7 @@ end
 
 Adds a plant to the supply chain.
 """
-function add_plant!(supply_chain, plant)
+function add_plant!(supply_chain::SupplyChain, plant)
     push!(supply_chain.plants, plant)
     return plant
 end
@@ -358,7 +365,7 @@ end
 
 Adds a transportation lane to the supply chain.
 """
-function add_lane!(supply_chain, lane)
+function add_lane!(supply_chain::SupplyChain, lane::Lane)
     push!(supply_chain.lanes, lane)
 
     if !haskey(supply_chain.lanes_in, lane.destination)
@@ -371,4 +378,109 @@ function add_lane!(supply_chain, lane)
     end
     push!(supply_chain.lanes_out[lane.origin] , lane)
     return lane
+end
+
+"""
+    can_ship(lane::Lane, time::Int)
+
+Checks if units can be send on the lane at a given time.
+"""
+function can_ship(lane::Lane, time::Int)
+    return isempty(lane.can_ship) || lane.can_ship[time]
+end
+
+"""
+    get_arrivals(lane::Lane, time::Int)
+
+Gets the known arrivals.
+"""
+function get_arrivals(lane::Lane, time::Int)
+    if isempty(lane.initial_arrivals)
+        return 0
+    else
+        return lane.initial_arrivals[time]
+    end
+end
+
+
+function get_demand(supply_chain, customer, product, time)
+    for demand in supply_chain.demand
+        if demand.customer == customer && demand.product == product
+            return demand.demand[time]
+        end
+    end
+    return 0
+end
+
+function get_service_level(supply_chain, customer, product)
+    for demand in supply_chain.demand
+        if demand.customer == customer && demand.product == product
+            return demand.service_level
+        end
+    end
+    return 1.0
+end
+
+function get_lanes_in(supply_chain, node)
+    if(haskey(supply_chain.lanes_in, node))
+        return supply_chain.lanes_in[node]
+    else
+        return Lane[]
+    end
+end
+
+function get_lanes_out(supply_chain, node)
+    if(haskey(supply_chain.lanes_out, node))
+        return supply_chain.lanes_out[node]
+    end
+    return Lane[]
+end
+
+function has_bom(production, output)
+    if(haskey(production.bill_of_material, output))
+        return true
+    end
+    return false
+end
+
+function has_bom(production, output, input)
+    if(haskey(production.bill_of_material, output))
+        if(haskey(production.bill_of_material[output], input))
+            return true
+        end
+    end
+    return false
+end
+
+function get_bom(production, output, input)
+    if(haskey(production.bill_of_material, output))
+        if(haskey(production.bill_of_material[output], input))
+            return production.bill_of_material[output][input]
+        end
+    end
+    return Inf
+end
+
+function get_maximum_throughput(node, product)
+    if(haskey(node.maximum_throughput, product))
+        return node.maximum_throughput[product]
+    else
+        return Inf
+    end
+end
+
+function get_maximum_storage(node, product)
+    if(haskey(node.maximum_units, product))
+        return node.maximum_units[product]
+    else
+        return Inf
+    end
+end
+
+function get_additional_stock_cover(node, product)
+    if(haskey(node.additional_stock_cover, product))
+        return node.additional_stock_cover[product]
+    else
+        return 0
+    end
 end

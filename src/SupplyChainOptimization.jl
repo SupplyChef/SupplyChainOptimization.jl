@@ -43,65 +43,6 @@ export SupplyChain,
       plot_network,
       plot_inventory
 
-
-function get_demand(supply_chain, customer, product, time)
-    for demand in supply_chain.demand
-        if demand.customer == customer && demand.product == product
-            return demand.demand[time]
-        end
-    end
-    return 0
-end
-
-function get_service_level(supply_chain, customer, product)
-    for demand in supply_chain.demand
-        if demand.customer == customer && demand.product == product
-            return demand.service_level
-        end
-    end
-    return 1.0
-end
-
-function get_lanes_in(supply_chain, node)
-    if(haskey(supply_chain.lanes_in, node))
-        return supply_chain.lanes_in[node]
-    else
-        return Lane[]
-    end
-end
-
-function get_lanes_out(supply_chain, node)
-    if(haskey(supply_chain.lanes_out, node))
-        return supply_chain.lanes_out[node]
-    end
-    return Lane[]
-end
-
-function get_bom(production, output, input)
-    if(haskey(production.bill_of_material, output))
-        if(haskey(production.bill_of_material[output], input))
-            return production.bill_of_material[output][input]
-        end
-    end
-    return 0
-end
-
-function get_maximum_throughput(node, product)
-    if(haskey(node.maximum_throughput, product))
-        return node.maximum_throughput[product]
-    else
-        return 0
-    end
-end
-
-function get_additional_stock_cover(node, product)
-    if(haskey(node.additional_stock_cover, product))
-        return node.additional_stock_cover[product]
-    else
-        return 0
-    end
-end
-
 function check_model(supply_chain)
     for production in supply_chain.plants
         for product in supply_chain.products
@@ -109,7 +50,7 @@ function check_model(supply_chain)
             (!haskey(production.bill_of_material, product) && haskey(production.unit_cost, product)) ||
             (haskey(production.bill_of_material, product) && !haskey(production.time, product)) ||
             (!haskey(production.bill_of_material, product) && haskey(production.time, product))
-                throw(ArgumentError("Production $production must have the same produts in its bill_of_material, its unit_cost and its time data."))
+                throw(ArgumentError("Production $production must have the same products in its bill_of_material, its unit_cost and its time data."))
             end
         end
     end
@@ -120,17 +61,19 @@ end
 
 Optimizes the supply chain.
 """
-function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer)
-    create_network_optimization_model!(supply_chain, optimizer)
+function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true)
+    create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true)
     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
+    set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     optimize_network_optimization_model!(supply_chain)
 end
 
 """
 Creates an optimization model.
 """
-function create_network_optimization_model!(supply_chain, optimizer)
-    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer)
+function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true)
+    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer; single_source=single_source, evergreen=evergreen)
     set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
 
@@ -144,7 +87,7 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model(supply_chain, optimizer, bigM=100_000)
+function create_network_optimization_model(supply_chain, optimizer, bigM=100_000; single_source=false, evergreen=true)
     check_model(supply_chain)
 
     times = 1:supply_chain.horizon
@@ -173,8 +116,6 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @variable(m, opening[plants_storages, times], Bin)
     @variable(m, closing[plants_storages, times], Bin)
 
-    #@variable(m, serviced_by[products, storages, customers, times], Bin)
-
     @variable(m, lost_sales[products, customers, times] >= 0)
 
     @variable(m, bought[products, suppliers, times] >= 0)
@@ -189,25 +130,33 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @variable(m, received[products, lanes, times] >= 0)
 
     #single source constraint
-    #@constraint(m, [p=products, c=customers, t=times], sum(serviced_by[p, s, c, t] for s in storages) <= 1)
-    #@constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c) if l.origin == s) <= bigM * serviced_by[p, s, c, t])
+    if single_source
+        @variable(m, serviced_by[products, storages, customers, times], Bin)
+        @constraint(m, [p=products, c=customers, t=times], sum(serviced_by[p, s, c, t] for s in storages) <= 1)
+        @constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c) if l.origin == s) <= bigM * serviced_by[p, s, c, t])
+    end
 
     @constraint(m, [p=products, s=storages; haskey(s.initial_inventory, p)], stored_at_start[p, s, 1] == s.initial_inventory[p])
-    @constraint(m, [p=products, s=storages; !haskey(s.initial_inventory, p)], stored_at_start[p, s, 1] <= stored_at_end[p, s, supply_chain.horizon])
+    if evergreen
+        @constraint(m, [p=products, s=storages; !haskey(s.initial_inventory, p)], stored_at_start[p, s, 1] <= stored_at_end[p, s, supply_chain.horizon])
+    end
 
     @constraint(m, [p=products, l=lanes, t=times; t > l.time], received[p, l, t] == sent[p, l, t - l.time])
     @constraint(m, [p=products, l=lanes, t=times; t <= l.time], received[p, l, t] == 0)
 
-    @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0], sum(sent[p, l, t] for p in products) <= bigM * used[l, t])
+    @constraint(m, [l=lanes, t=times; !can_ship(l, t)], sum(sent[p, l, t] for p in products) == 0)
+    @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0 || l.fixed_cost > 0], sum(sent[p, l, t] for p in products) <= bigM * used[l, t])
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0], sum(sent[p, l, t] for p in products) >= l.minimum_quantity * used[l, t])
 
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= bigM * opened[s, t])
-    @constraint(m, [p=products, s=storages, c=customers, t=times], sum(sent[p, l, t] for l in filter(l -> l.destination == c, get_lanes_out(supply_chain, s))) <= get_demand(supply_chain, c, p, t) * opened[s, t])
+    @constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c) if l.origin == s) <= get_demand(supply_chain, c, p, t) * opened[s, t])
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])
 
+    @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p))
+    
     @constraint(m, [s=plants_storages], opening[s, 1] >= opened[s, 1] + (1 - s.initial_opened) - 1)
     @constraint(m, [s=plants_storages], opening[s, 1] <= opened[s, 1])
     @constraint(m, [s=plants_storages], opening[s, 1] <= 1 - s.initial_opened)
@@ -229,6 +178,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
 
     @constraint(m, [p=products, s=storages, t=times], stored_at_end[p, s, t] == stored_at_start[p, s, t] 
                                                                             + sum(received[p, l, t] for l in get_lanes_in(supply_chain, s))
+                                                                            + sum(get_arrivals(l, t) for l in get_lanes_in(supply_chain, s))
                                                                             - sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s))
                                                                             )
     @constraint(m, [p=products, s=storages, t=times; t > 1], stored_at_start[p, s, t] == stored_at_end[p, s, t - 1])
@@ -242,12 +192,14 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
         if haskey(s.time, p)
             @constraint(m, [t=times, ti=t:min(t+s.time[p], supply_chain.horizon)], produced[p, s, t] <= bigM * opened[s, ti])
         else
-            @constraint(m, [t=times], produced[p, s, t] == 0)
+            @constraint(m, sum(produced[p, s, :]) == 0)
+            @constraint(m, sum(sum(sent[p, l, :]) for l in get_lanes_out(supply_chain, s)) == 0)
         end
     end
     @constraint(m, [p=products, s=plants, t=times; haskey(s.time, p) && (t + s.time[p] <= supply_chain.horizon)], produced[p, s, t] == sum(sent[p, l, t + s.time[p]] for l in get_lanes_out(supply_chain, s)))
     @constraint(m, [p=products, s=plants, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
-    @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products) == sum(received[p, l, t] for l in get_lanes_in(supply_chain, s)))
+    @constraint(m, [p=products, s=plants; !has_bom(s, p)], sum(produced[p, s, :]; init=0.0) == 0)
+    @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products if has_bom(s, p2, p); init=0.0) == sum(received[p, l, t] for l in get_lanes_in(supply_chain, s)))
 
     @constraint(m, [p=products, c=customers, t=times], sum(received[p, l, t] for l in get_lanes_in(supply_chain, c)) == get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])
 
@@ -269,9 +221,10 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
                        sum(sum(received[p, l, t] * s.unit_handling_cost[p] for l in get_lanes_in(supply_chain, s)) for p in products for s in storages if haskey(s.unit_handling_cost, p)) +
                        sum(bought[p, s, t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p)) +
                        sum(produced[p, s, t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p)) +
-                       total_holding_costs)
+                       sum(l.fixed_cost * used[l, t] for l in lanes) +
+                       total_holding_costs_per_period[t])
 
-    @constraint(m, total_costs == sum(total_costs_per_period[t] for t in times))
+    @constraint(m, total_costs == sum(supply_chain.discount_factor ^ (t-1) * total_costs_per_period[t] for t in times))
 
     @objective(m, Min, 1.0 * total_costs)
 

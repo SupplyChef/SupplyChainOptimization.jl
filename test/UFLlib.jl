@@ -1,4 +1,5 @@
 using SupplyChainOptimization
+using Dates
 
 function parse_simple_data(file_name)
     lines = readlines(file_name)
@@ -126,31 +127,44 @@ function parse_orlib_data_cap(file_name, capacity=nothing)
     return sc
 end
 
-@test begin
+@testset "UFLlib" begin 
+@test begin 
+    start = Dates.now()
     sc = parse_simple_data(raw"..\data\BildeKrarup\B\B1.1")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 23468")
+    println("B1.1 $(Dates.now() - start) $(get_total_costs(sc)) == 23468")
     get_total_costs(sc) ≈ 23468
 end
 
+@test begin 
+    start = Dates.now()
+    sc = parse_simple_data(raw"..\data\BildeKrarup\B\B1.2")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("B1.2 $(Dates.now() - start) $(get_total_costs(sc)) == 22119")
+    get_total_costs(sc) ≈ 22119
+end 
+
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\40\cap41.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 932615.75")
+    println("cap41 $(Dates.now() - start) $(get_total_costs(sc)) == 932615.75")
     get_total_costs(sc) ≈ 932615.75
-end
+end 
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-cap\40\cap41.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 1040444.375")
+    println("cap41 $(Dates.now() - start) $(get_total_costs(sc)) == 1040444.375")
     get_total_costs(sc) ≈ 1040444.375
-end
+end 
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\90\cap91.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) ==  796648.4375")
+    println("cap91 $(Dates.now() - start) $(get_total_costs(sc)) == 796648.4375")
     get_total_costs(sc) ≈ 796648.4375
 end
 
@@ -162,9 +176,10 @@ end
 end
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capa.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 17156454.47830")
+    println("capa $(Dates.now() - start) $(get_total_costs(sc)) == 17156454.47830")
     get_total_costs(sc) ≈ 17156454.47830
 end
 
@@ -176,15 +191,18 @@ end
 # end
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capb.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 12979071.58143")
+    println("capb $(Dates.now() - start) $(get_total_costs(sc)) == 12979071.58143")
     get_total_costs(sc) ≈ 12979071.58143
 end
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capb.txt", 8000)
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) == 13082516.496")
+    println("capb $(Dates.now() - start) $(get_total_costs(sc)) == 13082516.496")
     get_total_costs(sc) ≈ 13082516.496
+end
 end
