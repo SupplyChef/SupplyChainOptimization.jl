@@ -89,6 +89,20 @@ function get_shipments(supply_chain::SupplyChain, lane::Lane, product::Product, 
 end
 
 """
+    get_shipments(supply_chain::SupplyChain, lane::Lane, destination, product::Product, period=1)
+
+Gets the amount of a given product sent on a lane at a given period.
+"""
+function get_shipments(supply_chain::SupplyChain, lane::Lane, destination, product::Product, period=1)
+    check(supply_chain)
+    index = findfirst(d -> d == destination, lane.destinations)
+    if isnothing(index) || period + lane.times[index] > supply_chain.horizon
+        return 0
+    end
+    return value(supply_chain.optimization_model[:received][product, lane, destination, period + lane.times[index]])
+end
+
+"""
     is_opened(supply_chain::SupplyChain, storage::Storage, period=1)
 
 Gets whether a given storage location is opened during a given period.
@@ -129,7 +143,7 @@ Gets the inventory of a product stored at the start of a period.
 """
 function get_inventory_at_start(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:stored_at_start][product, storage, period]) 
+    return value(supply_chain.optimization_model[:stored_at_end][product, storage, period-1]) 
 end
 
 """

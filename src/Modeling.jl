@@ -28,12 +28,13 @@ A product.
 mutable struct Product
     name::String
     unit_holding_cost::Float64
+    zone
 
     """
     Creates a new product.
     """
     function Product(name::String; unit_holding_cost::Float64=0.0)
-        return new(name, unit_holding_cost)
+        return new(name, unit_holding_cost, 1)
     end
 end
 
@@ -46,16 +47,34 @@ A transportation lane between two nodes of the supply chain.
 """
 mutable struct Lane
     origin::Node
-    destination::Node
+    destinations::Array{N, 1} where N <: Node
     fixed_cost::Float64
     unit_cost::Float64
     minimum_quantity::Float64
-    time::Int
-    initial_arrivals::Array{Int64, 1}
+    times::Array{Int, 1}
+    initial_arrivals::Union{Nothing, Array{Array{Int64, 1}}} # for each time, for each destination the amount arriving
     can_ship::Array{Bool, 1}
 
-    function Lane(origin, destination; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=[], can_ship=[])
-        return new(origin, destination, fixed_cost, unit_cost, minimum_quantity, time, initial_arrivals, can_ship)
+    function Lane(origin, destination::Node; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=[], can_ship=[])
+        return new(origin, 
+                   [destination], 
+                   fixed_cost, 
+                   unit_cost, 
+                   minimum_quantity, 
+                   [time], 
+                   [[initial_arrivals[t]] for t in 1:length(initial_arrivals)], 
+                   can_ship)
+    end
+
+    function Lane(origin, destinations::Array{N, 1}; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, times=Int[]::Array{Int, 1}, initial_arrivals=nothing::Union{Nothing, Array{Array{Int, 1}}}, can_ship=[]) where N <: Node
+        return new(origin, 
+                   destinations, 
+                   fixed_cost, 
+                   unit_cost, 
+                   minimum_quantity, 
+                   isempty(times) ? zeros(Int, length(destinations)) : times, 
+                   initial_arrivals, 
+                   can_ship)
     end
 end
 
@@ -368,10 +387,12 @@ Adds a transportation lane to the supply chain.
 function add_lane!(supply_chain::SupplyChain, lane::Lane)
     push!(supply_chain.lanes, lane)
 
-    if !haskey(supply_chain.lanes_in, lane.destination)
-        supply_chain.lanes_in[lane.destination] = Array{Lane, 1}()
+    for destination in lane.destinations
+        if !haskey(supply_chain.lanes_in, destination)
+            supply_chain.lanes_in[destination] = Array{Lane, 1}()
+        end
+        push!(supply_chain.lanes_in[destination] , lane)
     end
-    push!(supply_chain.lanes_in[lane.destination] , lane)
 
     if !haskey(supply_chain.lanes_out, lane.origin)
         supply_chain.lanes_out[lane.origin] = Array{Lane, 1}()
@@ -390,15 +411,16 @@ function can_ship(lane::Lane, time::Int)
 end
 
 """
-    get_arrivals(lane::Lane, time::Int)
+    get_arrivals(lane::Lane, destination, time::Int)
 
 Gets the known arrivals.
 """
-function get_arrivals(lane::Lane, time::Int)
-    if isempty(lane.initial_arrivals)
+function get_arrivals(lane::Lane, destination, time::Int)
+    index = findfirst(d -> d == destination, lane.destinations)
+    if isnothing(lane.initial_arrivals) || isempty(lane.initial_arrivals) || isnothing(index)
         return 0
     else
-        return lane.initial_arrivals[time]
+        return lane.initial_arrivals[time][index]
     end
 end
 
@@ -419,6 +441,13 @@ function get_service_level(supply_chain, customer, product)
         end
     end
     return 1.0
+end
+
+function get_lanes_between(supply_chain, from, to)
+    if(haskey(supply_chain.lanes_out, from))
+        return filter(l -> to ∈ l.destinations, supply_chain.lanes_out[from])
+    end
+    return Lane[]
 end
 
 function get_lanes_in(supply_chain, node)
@@ -483,4 +512,11 @@ function get_additional_stock_cover(node, product)
     else
         return 0
     end
+end
+
+function get_sent_time(lane, destination, receipt_time)
+    index = findfirst(d -> d == destination, lane.destinations)
+    transit_time = lane.times[index]
+    sent_time = receipt_time - transit_time
+    return sent_time
 end

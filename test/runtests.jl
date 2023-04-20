@@ -7,7 +7,7 @@ using Test
 include("Models.jl")
 
 include("Inventory.jl")
-#include("UFLlib.jl")
+include("UFLlib.jl")
 
 include("UnitTests.jl")
 

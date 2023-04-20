@@ -39,4 +39,90 @@ end
         println("$(start - Dates.now())")
         true
     end
+
+    @test begin
+        start = Dates.now()
+
+        horizon = 400
+        #plant -> storage -> customer
+        sc = SupplyChain(horizon)
+
+        product = Product("p1"; unit_holding_cost=0.01)
+        add_product!(sc, product)
+
+        customer1 = Customer("c1", Seattle)
+        add_customer!(sc, customer1)
+        add_demand!(sc, customer1, product; demand=repeat([100.0], horizon))
+
+        customer2 = Customer("c2", Seattle)
+        add_customer!(sc, customer2)
+        add_demand!(sc, customer2, product; demand=repeat([100.0], horizon))
+
+        storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
+        add_storage!(sc, storage)
+        add_product!(storage, product)
+
+        plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
+        add_plant!(sc, plant)
+        add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
+
+        lane = Lane(storage, [customer1, customer2]; unit_cost=1.0)
+        add_lane!(sc, lane)
+        lane2 = Lane(plant, storage; fixed_cost=0, unit_cost=1.0)
+        add_lane!(sc, lane2)
+
+        SupplyChainOptimization.optimize_network!(sc; log=true)
+
+        #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
+        #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 
+        #println([get_shipments(sc, lane2, product, t) for t in 1:horizon])
+    
+        println("$(start - Dates.now())")
+        [get_shipments(sc, lane, customer1, product, t) for t in 1:horizon] == repeat([100.0], horizon) &&
+        [get_shipments(sc, lane, customer2, product, t) for t in 1:horizon] == repeat([100.0], horizon) && 
+        [get_shipments(sc, lane2, product, t) for t in 1:horizon] == repeat([200.0], horizon)
+    end
+
+    @test begin
+        start = Dates.now()
+
+        horizon = 400
+        #plant -> storage -> customer
+        sc = SupplyChain(horizon)
+
+        product = Product("p1"; unit_holding_cost=0.01)
+        add_product!(sc, product)
+
+        customer1 = Customer("c1", Seattle)
+        add_customer!(sc, customer1)
+        add_demand!(sc, customer1, product; demand=repeat([100.0], horizon))
+
+        customer2 = Customer("c2", Seattle)
+        add_customer!(sc, customer2)
+        add_demand!(sc, customer2, product; demand=repeat([100.0], horizon))
+
+        storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
+        add_storage!(sc, storage)
+        add_product!(storage, product)
+
+        plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
+        add_plant!(sc, plant)
+        add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
+
+        lane = Lane(storage, [customer1, customer2]; unit_cost=1.0, initial_arrivals=repeat([[50, 50]], horizon))
+        add_lane!(sc, lane)
+        lane2 = Lane(plant, storage; fixed_cost=0.0, unit_cost=1.0)
+        add_lane!(sc, lane2)
+
+        SupplyChainOptimization.optimize_network!(sc; log=true)
+    
+        #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
+        #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 
+        #println([get_shipments(sc, lane2, product, t) for t in 1:horizon])
+
+        println("$(start - Dates.now())")
+        [get_shipments(sc, lane, customer1, product, t) for t in 1:horizon] == repeat([50.0], horizon) &&
+        [get_shipments(sc, lane, customer2, product, t) for t in 1:horizon] == repeat([50.0], horizon) 
+        [get_shipments(sc, lane2, product, t) for t in 1:horizon] == repeat([100.0], horizon)
+    end
 end

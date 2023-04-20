@@ -141,25 +141,27 @@ function plot_flows(supply_chain, period=1; geography="usa", showlegend=true)
     color_index = 0
 
     traces = AbstractTrace[]
-    for l in sort(collect(supply_chain.lanes), by=l->string(l.origin.location.name, l.destination.location.name))
-        if sum(get_shipments(supply_chain, l, p, period) for p in supply_chain.products) > 2e-10
-            if l.origin in keys(origin_colors)
-                color = origin_colors[l.origin]
-            else
-                color_index = mod1(color_index + 1, length(colors))
-                color = colors[color_index]
-                push!(origin_colors, l.origin => color)
+    for l in supply_chain.lanes #sort(collect(supply_chain.lanes), by=l->string(l.origin.location.name, l.destination.location.name))
+        for d in l.destinations
+            if sum(get_shipments(supply_chain, l, d, p, period) for p in supply_chain.products) > 2e-10
+                if l.origin in keys(origin_colors)
+                    color = origin_colors[l.origin]
+                else
+                    color_index = mod1(color_index + 1, length(colors))
+                    color = colors[color_index]
+                    push!(origin_colors, l.origin => color)
+                end
+            
+                push!(traces,
+                    scattergeo(;lat=[l.origin.location.latitude, d.location.latitude],
+                                lon=[l.origin.location.longitude, d.location.longitude],
+                                hoverinfo="text",
+                                text="$(l.origin.location.name) - $(d.location.name)",
+                                name="$(l.origin.location.name) - $(d.location.name)",
+                                mode="lines",
+                                line_color=color)
+                )
             end
-        
-            push!(traces,
-                scattergeo(;lat=[l.origin.location.latitude, l.destination.location.latitude],
-                            lon=[l.origin.location.longitude, l.destination.location.longitude],
-                            hoverinfo="text",
-                            text="$(l.origin.location.name) - $(l.destination.location.name)",
-                            name="$(l.origin.location.name) - $(l.destination.location.name)",
-                            mode="lines",
-                            line_color=color)
-            )
         end
     end
 
