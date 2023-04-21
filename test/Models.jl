@@ -198,12 +198,13 @@ function create_test_broken_model()
 
     customer = Customer("c1", Seattle)
     add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
+    #add_demand!(sc, customer, product2; demand=[100.0, 100.0])
 
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
     add_storage!(sc, storage)
     add_product!(storage, product2)
     plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
+    add_product!(plant, product2; bill_of_material=Dict(product1 => 1.0))
     add_plant!(sc, plant)
     
     add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
@@ -233,6 +234,7 @@ function create_test_infeasible_model()
     add_product!(storage, product2)
     
     plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
+    #add_product!(plant, product2; bill_of_material=Dict(product1 => 1.0))
     add_plant!(sc, plant)
     
     add_lane!(sc, Lane(storage, customer; unit_cost=1.0))

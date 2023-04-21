@@ -91,19 +91,6 @@ struct Customer <: Node
     end
 end
 
-"""
-    add_product!(customer::Customer, product::Product; demand::Array{Float64, 1})
-
-Indicates that a customer needs a product.
-
-The keyword arguments are:
- - `demand`: the amount of unit of product needed for each time period.
-
-"""
-function add_product!(customer::Customer, product::Product; demand::Array{Float64, 1})
-    customer.demand[product] = demand
-end
-
 Base.:(==)(x::Customer, y::Customer) = x.name == y.name 
 Base.hash(x::Customer, h::UInt64) = hash(x.name, h)
 Base.show(io::IO, x::Customer) = print(io, x.name)
@@ -238,7 +225,7 @@ The keyword arguments are:
  - `time`: the production lead time.
 
 """
-function add_product!(plant::Plant, product; bill_of_material::Dict{Product, Float64}, unit_cost, maximum_throughput::Real=Inf, time::Int=0)
+function add_product!(plant::Plant, product; bill_of_material::Dict{Product, Float64}, unit_cost=0.0, maximum_throughput::Real=Inf, time::Int=0)
     plant.bill_of_material[product] = bill_of_material
     plant.unit_cost[product] = unit_cost
     plant.maximum_throughput[product] = maximum_throughput

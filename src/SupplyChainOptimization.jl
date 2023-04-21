@@ -54,6 +54,12 @@ function check_model(supply_chain)
             end
         end
     end
+
+    for customer in supply_chain.customers
+        if isempty(filter(d -> d.customer == customer, supply_chain.demand))
+            throw(ArgumentError("Customer $customer does not have demand."))
+        end
+    end
 end
 
 """

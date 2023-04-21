@@ -104,11 +104,12 @@ end
 end
 
 @testset "Invalid" begin
-    #@test_throws ArgumentError begin
-    #    sc, product2, plant = create_test_broken_model()
-    #    SupplyChainOptimization.optimize!(sc)
-    #    status = termination_status(sc.optimization_model)
-    #end
+    @test_throws ArgumentError begin
+    #@test begin
+        sc, product2, plant = create_test_broken_model()
+        SupplyChainOptimization.optimize_network!(sc)
+        status = termination_status(sc.optimization_model)
+    end
 end
 
 @testset "Scaling" begin
