@@ -22,7 +22,7 @@ end
     
     @test begin
         start = Dates.now()
-        sc = create_model_plant_storage_customer(400)
+        sc = create_model_plant_storage_customer(;horizon=400)
 
         product = first(sc.products)
         product.unit_holding_cost = 0.1
@@ -31,11 +31,25 @@ end
         lane.fixed_cost = 10_000
         lane.can_ship = repeat([true, false, false, false], 100)
 
-        SupplyChainOptimization.optimize_network!(sc; log=true)
+        SupplyChainOptimization.optimize_network!(sc)
     
         #println(value.(sc.optimization_model[:used]))
         println([get_shipments(sc, lane, product, t) for t in 1:100])
         println(eoq_quantity(100, 10_000, 0.1))
+        println("$(start - Dates.now())")
+        true
+    end
+
+    @test begin
+        start = Dates.now()
+        sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
+
+        product = first(sc.products)
+        product.unit_holding_cost = 0.1
+
+        SupplyChainOptimization.optimize_network!(sc)
+    
+        #println(value.(sc.optimization_model[:used]))
         println("$(start - Dates.now())")
         true
     end
@@ -71,7 +85,7 @@ end
         lane2 = Lane(plant, storage; fixed_cost=0, unit_cost=1.0)
         add_lane!(sc, lane2)
 
-        SupplyChainOptimization.optimize_network!(sc; log=true)
+        SupplyChainOptimization.optimize_network!(sc)
 
         #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
         #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 
@@ -114,7 +128,7 @@ end
         lane2 = Lane(plant, storage; fixed_cost=0.0, unit_cost=1.0)
         add_lane!(sc, lane2)
 
-        SupplyChainOptimization.optimize_network!(sc; log=true)
+        SupplyChainOptimization.optimize_network!(sc)
     
         #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
         #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 

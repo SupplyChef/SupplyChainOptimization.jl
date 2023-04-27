@@ -53,7 +53,7 @@ function parse_orlib_data_uncap(file_name)
     for f in 1:facility_count
         number_index += 1
         #println(numbers[number_index])
-        storage = Storage("s$f", Location(0, 0); fixed_cost=parse(Float64, numbers[number_index]), opening_cost=0.0, closing_cost=Inf, initial_opened=false)
+        storage = Storage("s$f", Location(0, 0); fixed_cost=parse(Float64, numbers[number_index]), opening_cost=Inf, closing_cost=0.0, initial_opened=true)
         number_index += 1
         add_product!(storage, product; initial_inventory=customer_count, unit_handling_cost=0.0)
         add_storage!(sc, storage)
@@ -101,7 +101,7 @@ function parse_orlib_data_cap(file_name, capacity=nothing)
     for f in 1:facility_count
         inventory = parse(Float64, numbers[number_index])
         number_index += 1
-        storage = Storage("s$f", Location(0, 0); fixed_cost=parse(Float64, numbers[number_index]), opening_cost=0.0, closing_cost=0.0, initial_opened=false)
+        storage = Storage("s$f", Location(0, 0); fixed_cost=0.0, opening_cost=parse(Float64, numbers[number_index]), closing_cost=Inf, initial_opened=false)
         number_index += 1
         add_product!(storage, product; initial_inventory=inventory, unit_handling_cost=0.0)
         add_storage!(sc, storage)
@@ -144,11 +144,51 @@ end
     get_total_costs(sc) ≈ 22119
 end 
 
+@test begin 
+    start = Dates.now()
+    sc = parse_simple_data(raw"..\data\BildeKrarup\Dq\1\D1.1")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("D1.1 $(Dates.now() - start) $(get_total_costs(sc)) == 14190")
+    get_total_costs(sc) ≈ 14190
+end
+
+@test begin 
+    start = Dates.now()
+    sc = parse_simple_data(raw"..\data\BildeKrarup\Eq\10\E10.1")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("E10.1 $(Dates.now() - start) $(get_total_costs(sc)) == 46832")
+    get_total_costs(sc) ≈ 46832
+end
+
+@test begin
+    start = Dates.now()
+    sc = parse_orlib_data_uncap(raw"..\data\M\O\MO1")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("MO1 $(Dates.now() - start) $(get_total_costs(sc)) == 1305.95141")
+    get_total_costs(sc) ≈ 1305.95141
+end 
+
+@test begin
+    start = Dates.now()
+    sc = parse_orlib_data_uncap(raw"..\data\M\P\MP1")
+    SupplyChainOptimization.optimize_network!(sc)
+    println("MP1 $(Dates.now() - start) $(get_total_costs(sc)) == 2686.48")
+    get_total_costs(sc) ≈ 2686.47946
+end
+
+@test begin
+    start = Dates.now()
+    sc = parse_orlib_data_uncap(raw"..\data\M\Q\MQ5")
+    SupplyChainOptimization.optimize_network!(sc; log=true)
+    println("MQ5 $(Dates.now() - start) $(get_total_costs(sc)) == 4080.7429")
+    get_total_costs(sc) ≈ 4080.7429
+end
+
 @test begin
     start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\40\cap41.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("cap41 $(Dates.now() - start) $(get_total_costs(sc)) == 932615.75")
+    println("uncap41 $(Dates.now() - start) $(get_total_costs(sc)) == 932615.75")
     get_total_costs(sc) ≈ 932615.75
 end 
 
@@ -164,14 +204,15 @@ end
     start = Dates.now()
     sc = parse_orlib_data_uncap(raw"..\data\ORLIB\ORLIB-cap\90\cap91.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("cap91 $(Dates.now() - start) $(get_total_costs(sc)) == 796648.4375")
+    println("uncap91 $(Dates.now() - start) $(get_total_costs(sc)) == 796648.4375")
     get_total_costs(sc) ≈ 796648.4375
 end
 
 @test begin
+    start = Dates.now()
     sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-cap\90\cap91.txt")
     SupplyChainOptimization.optimize_network!(sc)
-    println("$(get_total_costs(sc)) ==  796648.438")
+    println("cap91 $(Dates.now() - start) $(get_total_costs(sc)) ==  796648.438")
     get_total_costs(sc) ≈ 796648.438
 end
 

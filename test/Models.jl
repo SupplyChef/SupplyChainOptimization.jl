@@ -46,16 +46,12 @@ function create_model_supplier_storage_customer()
     return sc, product, supplier
 end
 
-function create_model_plant_storage_customer(horizon=1)
+function create_model_plant_storage_customer(;horizon=1, customer_count=1)
     #plant -> storage -> customer
     sc = SupplyChain(horizon)
 
     product = Product("p1")
     add_product!(sc, product)
-    
-    customer = Customer("c1", Seattle)
-    add_customer!(sc, customer)
-    add_demand!(sc, customer, product; demand=repeat([100.0], horizon))
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
     add_storage!(sc, storage)
@@ -64,8 +60,14 @@ function create_model_plant_storage_customer(horizon=1)
     plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
     add_plant!(sc, plant)
     add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
+
+    for i in 1:customer_count
+        customer = Customer("c$i", Seattle)
+        add_customer!(sc, customer)
+        add_demand!(sc, customer, product; demand=repeat([100.0], horizon))
+        add_lane!(sc, Lane(storage, customer; fixed_cost=10.0, unit_cost=1.0))
+    end
     
-    add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
     add_lane!(sc, Lane(plant, storage; fixed_cost=100, unit_cost=1.0))
 
     return sc

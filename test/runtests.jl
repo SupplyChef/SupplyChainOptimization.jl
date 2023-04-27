@@ -67,7 +67,8 @@ end
 @test begin
     sc = create_model_plant_storage_customer()
     SupplyChainOptimization.optimize_network!(sc)
-    get_total_costs(sc) == 3400 && 
+    println("$(get_total_costs(sc)) == 3410")
+    get_total_costs(sc) == 3410 && 
     get_production(sc, first(sc.plants), first(sc.products), 1) == 100
 end
 
