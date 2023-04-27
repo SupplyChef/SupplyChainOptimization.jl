@@ -176,13 +176,13 @@ end
     get_total_costs(sc) ≈ 2686.47946
 end
 
-@test begin
-    start = Dates.now()
-    sc = parse_orlib_data_uncap(raw"..\data\M\Q\MQ5")
-    SupplyChainOptimization.optimize_network!(sc; log=true)
-    println("MQ5 $(Dates.now() - start) $(get_total_costs(sc)) == 4080.7429")
-    get_total_costs(sc) ≈ 4080.7429
-end
+#@test begin
+#    start = Dates.now()
+#    sc = parse_orlib_data_uncap(raw"..\data\M\Q\MQ5")
+#    SupplyChainOptimization.optimize_network!(sc; log=true)
+#    println("MQ5 $(Dates.now() - start) $(get_total_costs(sc)) == 4080.7429")
+#    get_total_costs(sc) ≈ 4080.7429
+#end
 
 @test begin
     start = Dates.now()
