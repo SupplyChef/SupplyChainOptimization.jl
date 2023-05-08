@@ -264,8 +264,8 @@ mutable struct SupplyChain
     lanes::Set{Lane}
     demand::Set{Demand}
 
-    lanes_in::Dict{Node, Array{Lane, 1}}
-    lanes_out::Dict{Node, Array{Lane, 1}}
+    lanes_in::Dict{Node, Set{Lane}}
+    lanes_out::Dict{Node, Set{Lane}}
 
     optimization_model
     discount_factor
@@ -282,8 +282,8 @@ mutable struct SupplyChain
                  Set{Plant}(), 
                  Set{Lane}(), 
                  Set{Demand}(),
-                 Dict{Node, Array{Lane, 1}}(), 
-                 Dict{Node, Array{Lane, 1}}(),
+                 Dict{Node, Set{Lane}}(), 
+                 Dict{Node, Set{Lane}}(),
                  nothing,
                  discount_factor)
         return sc
@@ -376,13 +376,13 @@ function add_lane!(supply_chain::SupplyChain, lane::Lane)
 
     for destination in lane.destinations
         if !haskey(supply_chain.lanes_in, destination)
-            supply_chain.lanes_in[destination] = Array{Lane, 1}()
+            supply_chain.lanes_in[destination] = Set{Lane}()
         end
         push!(supply_chain.lanes_in[destination] , lane)
     end
 
     if !haskey(supply_chain.lanes_out, lane.origin)
-        supply_chain.lanes_out[lane.origin] = Array{Lane, 1}()
+        supply_chain.lanes_out[lane.origin] = Set{Lane}()
     end
     push!(supply_chain.lanes_out[lane.origin] , lane)
     return lane
@@ -431,8 +431,8 @@ function get_service_level(supply_chain, customer, product)
 end
 
 function get_lanes_between(supply_chain, from, to)
-    if(haskey(supply_chain.lanes_out, from))
-        return filter(l -> to ∈ l.destinations, supply_chain.lanes_out[from])
+    if(haskey(supply_chain.lanes_out, from) && haskey(supply_chain.lanes_in, to))
+        return intersect(supply_chain.lanes_out[from], supply_chain.lanes_in[to])
     end
     return Lane[]
 end

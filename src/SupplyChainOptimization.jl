@@ -67,8 +67,8 @@ end
 
 Optimizes the supply chain.
 """
-function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true)
-    create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true)
+function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false)
+    create_network_optimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
@@ -78,8 +78,8 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true)
-    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer; single_source=single_source, evergreen=evergreen)
+function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=truee, use_direct_model=false)
+    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
 
@@ -93,7 +93,7 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model(supply_chain, optimizer, bigM=100_000; single_source=false, evergreen=true)
+function create_network_optimization_model(supply_chain, optimizer, bigM=100_000; single_source=false, evergreen=true, use_direct_model=false)
     check_model(supply_chain)
 
     times = 1:supply_chain.horizon
@@ -105,7 +105,10 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     plants_storages = [x for x in union(plants, storages)]
     lanes = supply_chain.lanes
 
-    m = Model(optimizer)#; bridge_constraints = false)
+    m = Model(HiGHS.Optimizer)
+    if use_direct_model
+        m = direct_model(HiGHS.Optimizer())#; bridge_constraints = false)
+    end
     set_string_names_on_creation(m, false)
 
     @variable(m, total_costs >= 0)

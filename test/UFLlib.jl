@@ -246,4 +246,12 @@ end
     println("capb $(Dates.now() - start) $(get_total_costs(sc)) == 13082516.496")
     get_total_costs(sc) ≈ 13082516.496
 end
+
+@test begin
+    start = Dates.now()
+    sc = parse_orlib_data_cap(raw"..\data\ORLIB\ORLIB-uncap\a-c\capb.txt", 8000)
+    SupplyChainOptimization.optimize_network!(sc; use_direct_model=true)
+    println("capb $(Dates.now() - start) $(get_total_costs(sc)) == 13082516.496")
+    get_total_costs(sc) ≈ 13082516.496
+end
 end
