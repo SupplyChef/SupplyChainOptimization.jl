@@ -80,11 +80,11 @@ function parse_orlib_data_uncap(file_name)
 end
 
 function parse_orlib_data_cap(file_name, capacity=nothing)
-    if isnothing(capacity)
+    #if isnothing(capacity)
         numbers = split(read(file_name, String))
-    else
-        numbers = split(replace(read(file_name, String), "capacity"=>capacity))
-    end
+    #else
+    #    numbers = split(replace(read(file_name, String), "capacity"=>capacity))
+    #end
     number_index = 1
 
     facility_count = parse(Int, numbers[number_index])
@@ -99,7 +99,7 @@ function parse_orlib_data_cap(file_name, capacity=nothing)
 
     facilities = []
     for f in 1:facility_count
-        inventory = parse(Float64, numbers[number_index])
+        inventory = (numbers[number_index] == "capacity") ? capacity : parse(Float64, numbers[number_index])
         number_index += 1
         storage = Storage("s$f", Location(0, 0); fixed_cost=0.0, opening_cost=parse(Float64, numbers[number_index]), closing_cost=Inf, initial_opened=false)
         number_index += 1

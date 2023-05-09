@@ -42,37 +42,39 @@ Base.:(==)(x::Product, y::Product) = x.name == y.name
 Base.hash(x::Product, h::UInt64) = hash(x.name, h)
 Base.show(io::IO, x::Product) = print(io, x.name)
 
+const zero1 = [0]
+
 """
 A transportation lane between two nodes of the supply chain.
 """
 mutable struct Lane
     origin::Node
-    destinations::Array{N, 1} where N <: Node
+    destinations::Array{Any, 1} #where N <: Node
     fixed_cost::Float64
     unit_cost::Float64
     minimum_quantity::Float64
     times::Array{Int, 1}
     initial_arrivals::Union{Nothing, Array{Array{Int64, 1}}} # for each time, for each destination the amount arriving
-    can_ship::Array{Bool, 1}
+    can_ship::Union{Nothing, Array{Bool, 1}}
 
-    function Lane(origin, destination::Node; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=[], can_ship=[])
+    function Lane(origin, destination::Node; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=nothing::Union{Nothing, Array{Int, 1}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}})
         return new(origin, 
                    [destination], 
                    fixed_cost, 
                    unit_cost, 
                    minimum_quantity, 
-                   [time], 
-                   [[initial_arrivals[t]] for t in 1:length(initial_arrivals)], 
+                   (time == 0) ? zero1 : [time], 
+                   isnothing(initial_arrivals) ? initial_arrivals : [[initial_arrivals[t]] for t in 1:length(initial_arrivals)], 
                    can_ship)
     end
 
-    function Lane(origin, destinations::Array{N, 1}; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, times=Int[]::Array{Int, 1}, initial_arrivals=nothing::Union{Nothing, Array{Array{Int, 1}}}, can_ship=[]) where N <: Node
+    function Lane(origin, destinations::Array{N, 1}; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, times=nothing::Union{Nothing, Array{Int, 1}}, initial_arrivals=nothing::Union{Nothing, Array{Array{Int, 1}}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}}) where N <: Node
         return new(origin, 
                    destinations, 
                    fixed_cost, 
                    unit_cost, 
                    minimum_quantity, 
-                   isempty(times) ? zeros(Int, length(destinations)) : times, 
+                   isnothing(times) ? zeros(Int, length(destinations)) : times, 
                    initial_arrivals, 
                    can_ship)
     end
@@ -394,7 +396,7 @@ end
 Checks if units can be send on the lane at a given time.
 """
 function can_ship(lane::Lane, time::Int)
-    return isempty(lane.can_ship) || lane.can_ship[time]
+    return isnothing(lane.can_ship) || lane.can_ship[time]
 end
 
 """
@@ -404,7 +406,7 @@ Gets the known arrivals.
 """
 function get_arrivals(lane::Lane, destination, time::Int)
     index = findfirst(d -> d == destination, lane.destinations)
-    if isnothing(lane.initial_arrivals) || isempty(lane.initial_arrivals) || isnothing(index)
+    if isnothing(lane.initial_arrivals) || isnothing(index)
         return 0
     else
         return lane.initial_arrivals[time][index]
@@ -434,14 +436,14 @@ function get_lanes_between(supply_chain, from, to)
     if(haskey(supply_chain.lanes_out, from) && haskey(supply_chain.lanes_in, to))
         return intersect(supply_chain.lanes_out[from], supply_chain.lanes_in[to])
     end
-    return Lane[]
+    return Set{Lane}()
 end
 
 function get_lanes_in(supply_chain, node)
     if(haskey(supply_chain.lanes_in, node))
         return supply_chain.lanes_in[node]
     else
-        return Lane[]
+        return Set{Lane}()
     end
 end
 
@@ -449,7 +451,7 @@ function get_lanes_out(supply_chain, node)
     if(haskey(supply_chain.lanes_out, node))
         return supply_chain.lanes_out[node]
     end
-    return Lane[]
+    return Set{Lane}()
 end
 
 function has_bom(production, output)
