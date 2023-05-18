@@ -78,7 +78,7 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=truee, use_direct_model=false)
+function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false)
     supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
@@ -105,7 +105,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     plants_storages = [x for x in union(plants, storages)]
     lanes = supply_chain.lanes
 
-    m = Model(HiGHS.Optimizer)
+    m = Model(optimizer)
     if use_direct_model
         m = direct_model(HiGHS.Optimizer())#; bridge_constraints = false)
     end
@@ -159,11 +159,15 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @constraint(m, [p=products, s=plants_storages, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_between(supply_chain, s, c)) 
         <= get_demand(supply_chain, c, p, t) * sum(opened[l.origin, get_sent_time(l, c, t)] for l in get_lanes_between(supply_chain, s, c) if get_sent_time(l, c, t) > 0))
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
+    ##@constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= s.maximum_overall_throughput)
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])
 
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p))
     
+    ##@constraint(m, [s=plants_storages; s.must_be_opened_at_end], opened[s, supply_chain.horizon] == 1)
+    ##@constraint(m, [s=plants_storages; s.must_be_closed_at_end], opened[s, supply_chain.horizon] == 0)
+
     @constraint(m, [s=plants_storages], opening[s, 1] >= opened[s, 1] + (1 - s.initial_opened) - 1)
     @constraint(m, [s=plants_storages], opening[s, 1] <= opened[s, 1])
     @constraint(m, [s=plants_storages], opening[s, 1] <= 1 - s.initial_opened)
