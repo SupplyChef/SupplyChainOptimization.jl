@@ -189,7 +189,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
 
     @constraint(m, [p=products, s=storages, t=times], stored_at_end[p, s, t] == stored_at_end[p, s, t-1] 
                                                                             + sum(received[p, l, s, t] for l in get_lanes_in(supply_chain, s))
-                                                                            + sum(get_arrivals(l, s, t) for l in get_lanes_in(supply_chain, s))
+                                                                            + sum(get_arrivals(p, l, s, t) for l in get_lanes_in(supply_chain, s))
                                                                             - sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s))
                                                                             )
     @constraint(m, [p=products, s=storages, t=times; get_additional_stock_cover(s, p) > 0], stored_at_end[p, s, t] >= get_additional_stock_cover(s, p) * sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)))
@@ -208,10 +208,10 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     end
     @constraint(m, [p=products, s=plants, t=times; haskey(s.time, p) && (t + s.time[p] <= supply_chain.horizon)], produced[p, s, t] == sum(sent[p, l, t + s.time[p]] for l in get_lanes_out(supply_chain, s)))
     @constraint(m, [p=products, s=plants, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
-    @constraint(m, [p=products, s=plants; !has_bom(s, p)], sum(produced[p, s, :]; init=0.0) == 0)
+    @constraint(m, [p=products, s=plants; !has_bom(s, p)], sum(produced[p, s, :]) == 0)
     @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products if has_bom(s, p2, p); init=0.0) == sum(received[p, l, s, t] for l in get_lanes_in(supply_chain, s)))
 
-    @constraint(m, [p=products, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_in(supply_chain, c)) + sum(get_arrivals(l, c, t) for l in get_lanes_in(supply_chain, c)) == get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])
+    @constraint(m, [p=products, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_in(supply_chain, c)) + sum(get_arrivals(p, l, c, t) for l in get_lanes_in(supply_chain, c)) == get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])
 
     @constraint(m, [p=products, c=customers], sum(lost_sales[p, c, t] for t in times) <= (1 - get_service_level(supply_chain, c, p)) * sum(get_demand(supply_chain, c, p, t) for t in times))
 

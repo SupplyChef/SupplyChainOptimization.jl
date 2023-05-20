@@ -22,15 +22,12 @@ end
     
     @test begin
         start = Dates.now()
-        sc = create_model_plant_storage_customer(;horizon=400)
+        sc = create_model_plant_storage_customer(;horizon=400, product_unit_holding_cost = 0.1, lane_fixed_cost = 10_000, lane_can_ship = repeat([true, false, false, false], 100))
 
         product = first(sc.products)
-        product.unit_holding_cost = 0.1
 
         lane = first(filter(l -> isa(l.origin, Plant), sc.lanes))
-        lane.fixed_cost = 10_000
-        lane.can_ship = repeat([true, false, false, false], 100)
-
+        
         SupplyChainOptimization.optimize_network!(sc)
     
         #println(value.(sc.optimization_model[:used]))
@@ -45,7 +42,6 @@ end
         sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
 
         product = first(sc.products)
-        product.unit_holding_cost = 0.1
 
         SupplyChainOptimization.optimize_network!(sc)
     
@@ -123,7 +119,7 @@ end
         add_plant!(sc, plant)
         add_product!(plant, product; bill_of_material=Dict{Product, Float64}(), unit_cost=1, maximum_throughput=Inf)
 
-        lane = Lane(storage, [customer1, customer2]; unit_cost=1.0, initial_arrivals=repeat([[50, 50]], horizon))
+        lane = Lane(storage, [customer1, customer2]; unit_cost=1.0, initial_arrivals=Dict(product => repeat([[50, 50]], horizon)))
         add_lane!(sc, lane)
         lane2 = Lane(plant, storage; fixed_cost=0.0, unit_cost=1.0)
         add_lane!(sc, lane2)

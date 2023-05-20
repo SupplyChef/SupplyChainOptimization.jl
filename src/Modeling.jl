@@ -25,7 +25,7 @@ end
 """
 A product.
 """
-mutable struct Product
+struct Product
     name::String
     unit_holding_cost::Float64
     zone
@@ -47,28 +47,28 @@ const zero1 = [0]
 """
 A transportation lane between two nodes of the supply chain.
 """
-mutable struct Lane
+struct Lane
     origin::Node
     destinations::Array{Any, 1} #where N <: Node
     fixed_cost::Float64
     unit_cost::Float64
     minimum_quantity::Float64
     times::Array{Int, 1}
-    initial_arrivals::Union{Nothing, Array{Array{Int64, 1}}} # for each time, for each destination the amount arriving
+    initial_arrivals::Union{Nothing, Dict{Product, Array{Array{Int64, 1}}}} # for each time, for each destination the amount arriving
     can_ship::Union{Nothing, Array{Bool, 1}}
 
-    function Lane(origin, destination::Node; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=nothing::Union{Nothing, Array{Int, 1}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}})
+    function Lane(origin, destination::Node; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, time::Int=0, initial_arrivals=nothing::Union{Nothing, Dict{Product, Array{Int, 1}}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}})
         return new(origin, 
                    [destination], 
                    fixed_cost, 
                    unit_cost, 
                    minimum_quantity, 
                    (time == 0) ? zero1 : [time], 
-                   isnothing(initial_arrivals) ? initial_arrivals : [[initial_arrivals[t]] for t in 1:length(initial_arrivals)], 
+                   isnothing(initial_arrivals) ? initial_arrivals : Dict([p => [[ia[t]] for t in 1:length(ia)] for (p, ia) in initial_arrivals]), 
                    can_ship)
     end
 
-    function Lane(origin, destinations::Array{N, 1}; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, times=nothing::Union{Nothing, Array{Int, 1}}, initial_arrivals=nothing::Union{Nothing, Array{Array{Int, 1}}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}}) where N <: Node
+    function Lane(origin, destinations::Array{N, 1}; fixed_cost=0.0, unit_cost=0.0, minimum_quantity=0.0, times=nothing::Union{Nothing, Array{Int, 1}}, initial_arrivals=nothing::Union{Nothing, Dict{Product, Array{Array{Int, 1}}}}, can_ship=nothing::Union{Nothing, Array{Bool, 1}}) where N <: Node
         return new(origin, 
                    destinations, 
                    fixed_cost, 
@@ -100,7 +100,7 @@ Base.show(io::IO, x::Customer) = print(io, x.name)
 """
 A supplier.
 """
-mutable struct Supplier <: Node
+struct Supplier <: Node
     name::String
 
     unit_cost::Dict{Product, Float64}
@@ -150,12 +150,13 @@ struct Storage <: Node
     initial_opened::Bool
     initial_inventory::Dict{Product, Float64}
 
+    must_be_opened_at_end::Bool
+    must_be_closed_at_end::Bool
+
     unit_handling_cost::Dict{Product, Float64}
-
     maximum_throughput::Dict{Product, Float64}
-
+    maximum_overall_throughput::Float64
     maximum_units::Dict{Product, Float64}
-
     additional_stock_cover::Dict{Product, Float64}
 
     location::Location
@@ -165,20 +166,32 @@ struct Storage <: Node
     """
     function Storage(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, 
                      initial_opened::Bool=true)
+                     #, must_be_opened_at_end::Bool=false, must_be_closed_at_end::Bool=false, maximum_overall_throughput::Float64=Inf)
         return new(name,
                    fixed_cost, opening_cost, closing_cost, 
                    initial_opened, 
-                   Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), 
+                   Dict{Product, Float64}(),
+                   false,#must_be_opened_at_end,
+                   false,#must_be_closed_at_end, 
+                   Dict{Product, Float64}(), 
+                   Dict{Product, Float64}(), 
+                   Inf,#maximum_overall_throughput, 
+                   Dict{Product, Float64}(), 
+                   Dict{Product, Float64}(), 
                    location)
     end
 end
 
-function add_product!(storage::Storage, product; initial_inventory::Union{Real, Nothing}=0, unit_handling_cost::Real=0, maximum_throughput::Real=Inf, additional_stock_cover::Real=0.0)
+function add_product!(storage::Storage, product; initial_inventory::Union{Real, Nothing}=0, unit_handling_cost::Real=0, maximum_throughput::Float64=Inf, additional_stock_cover::Real=0.0)
     if !isnothing(initial_inventory)
         storage.initial_inventory[product] = initial_inventory
     end
-    storage.unit_handling_cost[product] = unit_handling_cost
-    storage.maximum_throughput[product] = maximum_throughput
+    if unit_handling_cost > 0
+        storage.unit_handling_cost[product] = unit_handling_cost
+    end
+    if !isinf(maximum_throughput)
+        storage.maximum_throughput[product] = maximum_throughput
+    end
     storage.additional_stock_cover[product] = additional_stock_cover
 end
 
@@ -198,6 +211,8 @@ struct Plant <: Node
     closing_cost::Float64
 
     initial_opened::Bool
+    must_be_opened_at_end::Bool
+    must_be_closed_at_end::Bool
 
     bill_of_material::Dict{Product, Dict{Product, Float64}}
     unit_cost::Dict{Product, Float64}
@@ -210,8 +225,10 @@ struct Plant <: Node
     """
     Creates a new plant.
     """
-    function Plant(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, initial_opened::Bool=true)
-        return new(name, fixed_cost, opening_cost, closing_cost, initial_opened, Dict{Product, Dict{Product, Float64}}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), location)
+    function Plant(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, initial_opened::Bool=true, must_be_opened_at_end::Bool=false, must_be_closed_at_end::Bool=false)
+        return new(name, fixed_cost, opening_cost, closing_cost, initial_opened, must_be_opened_at_end, must_be_closed_at_end, 
+            Dict{Product, Dict{Product, Float64}}(), Dict{Product, Float64}(), Dict{Product, Float64}(), Dict{Product, Float64}(), 
+            location)
     end
 end
 
@@ -404,12 +421,12 @@ end
 
 Gets the known arrivals.
 """
-function get_arrivals(lane::Lane, destination, time::Int)
+function get_arrivals(product::Product, lane::Lane, destination, time::Int)
     index = findfirst(d -> d == destination, lane.destinations)
-    if isnothing(lane.initial_arrivals) || isnothing(index)
+    if isnothing(lane.initial_arrivals) || !haskey(lane.initial_arrivals, product) || isnothing(index)
         return 0
     else
-        return lane.initial_arrivals[time][index]
+        return lane.initial_arrivals[product][time][index]
     end
 end
 
