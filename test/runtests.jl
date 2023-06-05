@@ -6,6 +6,7 @@ using Test
 
 include("Models.jl")
 
+include("Docs.jl")
 include("Inventory.jl")
 include("UFLlib.jl")
 

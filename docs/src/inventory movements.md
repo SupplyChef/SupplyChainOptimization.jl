@@ -33,14 +33,11 @@ customer = Customer("Customer 1", Seattle)
 add_customer!(sc, customer)
 add_demand!(sc, customer, product; demand=[100.0 for i in 1:sc.horizon])
 
-lane = Lane(supplier, storage; minimum_quantity=1.0)
+lane = Lane(supplier, storage; minimum_quantity=1.0, fixed_cost=ordering_cost)
 add_lane!(sc, lane)
 add_lane!(sc, Lane(storage, customer; minimum_quantity=1.0))
 
-SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
-@objective(sc.optimization_model, Min, sum(sc.optimization_model[:used][lane, t] * ordering_cost for t in 1:sc.horizon) +
-                                       sum(sc.optimization_model[:stored_at_start][product, storage, t] * product.unit_holding_cost for t in 1:sc.horizon) )
-SupplyChainOptimization.optimize_network_optimization_model!(sc)
+SupplyChainOptimization.optimize_network!(sc)
 ```
 
 Once solve we can display the inventory at the storage location.
