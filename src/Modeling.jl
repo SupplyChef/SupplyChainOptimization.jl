@@ -165,7 +165,7 @@ struct Storage <: Node
     Creates a new storage location.
     """
     function Storage(name::String, location::Location; fixed_cost::Real=0.0, opening_cost::Real=0.0, closing_cost::Real=Inf, 
-                     initial_opened::Bool=true)
+                     initial_opened::Bool=true, maximum_overall_throughput::Float64=Inf)
                      #, must_be_opened_at_end::Bool=false, must_be_closed_at_end::Bool=false, maximum_overall_throughput::Float64=Inf)
         return new(name,
                    fixed_cost, opening_cost, closing_cost, 
@@ -175,7 +175,7 @@ struct Storage <: Node
                    false,#must_be_closed_at_end, 
                    Dict{Product, Float64}(), 
                    Dict{Product, Float64}(), 
-                   Inf,#maximum_overall_throughput, 
+                   maximum_overall_throughput, 
                    Dict{Product, Float64}(), 
                    Dict{Product, Float64}(), 
                    location)

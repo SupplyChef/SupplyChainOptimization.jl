@@ -67,8 +67,8 @@ end
 
 Optimizes the supply chain.
 """
-function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false)
-    create_network_optimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
+function optimize_network!(supply_chain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+    create_network_optimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
@@ -78,8 +78,8 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false)
-    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
+function create_network_optimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+    supply_chain.optimization_model = create_network_optimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
 
@@ -93,7 +93,7 @@ end
 """
 Creates an optimization model.
 """
-function create_network_optimization_model(supply_chain, optimizer, bigM=100_000; single_source=false, evergreen=true, use_direct_model=false)
+function create_network_optimization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false)
     check_model(supply_chain)
 
     times = 1:supply_chain.horizon
@@ -159,7 +159,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=100_000
     @constraint(m, [p=products, s=plants_storages, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_between(supply_chain, s, c)) 
         <= get_demand(supply_chain, c, p, t) * sum(opened[l.origin, get_sent_time(l, c, t)] for l in get_lanes_between(supply_chain, s, c) if get_sent_time(l, c, t) > 0))
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p))
-    ##@constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= s.maximum_overall_throughput)
+    @constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= s.maximum_overall_throughput)
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])
 

@@ -11,7 +11,7 @@ function plot_inventory(supply_chain, storage, product)
 end
 
 function plot_networks(supply_chain; geography="usa", showlegend=true)
-    return hcat([plot_network(supply_chain, p) for p in 1:supply_chain.horizon])
+    return hcat([plot_network(supply_chain, p; geography=geography, showlegend=showlegend) for p in 1:supply_chain.horizon])
 end
 
 """
@@ -21,7 +21,7 @@ Plots the nodes of the supply chain on a map.
 
 The geography must be one of: "world" | "usa" | "europe" | "asia" | "africa" | "north america" | "south america".
 """
-function plot_network(supply_chain, period=1; geography="usa", showlegend=true)
+function plot_network(supply_chain, period=1; geography="usa", showlegend=true, title="Supply chain network")
     traces = AbstractTrace[]
     first = true
     for storage in supply_chain.storages
@@ -102,7 +102,7 @@ function plot_network(supply_chain, period=1; geography="usa", showlegend=true)
     geo = attr(scope=geography,
                 showland=true,)
          
-    layout = Layout(;title="Supply chain network", showlegend=showlegend, geo=geo)
+    layout = Layout(;title=title, showlegend=showlegend, geo=geo)
     return Plot(traces, layout)
 end
 
