@@ -1,4 +1,5 @@
 using Base: product
+using SupplyChainModeling
 using SupplyChainOptimization
 #using Cbc
 using JuMP

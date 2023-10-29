@@ -1,6 +1,7 @@
 
 using HiGHS
 using JuMP
+using SupplyChainModeling
 using SupplyChainOptimization
 
 @test begin
@@ -10,7 +11,7 @@ using SupplyChainOptimization
 
     ordering_cost = 100
 
-    product = Product("Product 1"; unit_holding_cost=0.01)
+    product = Product("Product 1")
     add_product!(sc, product)
 
     supplier = Supplier("Supplier 1", Seattle)
@@ -20,7 +21,7 @@ using SupplyChainOptimization
     storage = Storage("Storage 1", Seattle; 
                 fixed_cost= 0, 
                 initial_opened=true)
-    add_product!(storage, product; additional_stock_cover=0, initial_inventory=nothing)
+    add_product!(storage, product; additional_stock_cover=0, initial_inventory=0, unit_holding_cost=0.01)
     add_storage!(sc, storage)
 
     customer = Customer("Customer 1", Seattle)
@@ -33,7 +34,7 @@ using SupplyChainOptimization
 
     SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
     @objective(sc.optimization_model, Min, sum(sc.optimization_model[:used][lane, t] * ordering_cost for t in 1:sc.horizon) +
-                                        sum(sc.optimization_model[:stored_at_end][product, storage, t-1] * product.unit_holding_cost for t in 1:sc.horizon) )
+                                        sum(sc.optimization_model[:stored_at_end][product, storage, t-1] * get(storage.unit_holding_cost, product, 0.0) for t in 1:sc.horizon) )
     SupplyChainOptimization.optimize_network_optimization_model!(sc)
 
     println(objective_value(sc.optimization_model))
@@ -47,7 +48,7 @@ end
 
     ordering_cost = 100
 
-    product = Product("Product 1"; unit_holding_cost=0.01)
+    product = Product("Product 1")
     add_product!(sc, product)
 
     supplier = Supplier("Supplier 1", Seattle)
@@ -57,7 +58,7 @@ end
     storage = Storage("Storage 1", Seattle; 
                 fixed_cost= 0, 
                 initial_opened=true)
-    add_product!(storage, product; additional_stock_cover=0, initial_inventory=nothing)
+    add_product!(storage, product; additional_stock_cover=0, initial_inventory=0, unit_holding_cost=0.01)
     add_storage!(sc, storage)
 
     customer = Customer("Customer 1", Seattle)

@@ -8,6 +8,7 @@ The problem is modeled and solved as shown below.
 ```
 using HiGHS
 using JuMP
+using SupplyChainModeling
 using SupplyChainOptimization
 
 Seattle = Location(47.608013, -122.335167)
@@ -16,7 +17,7 @@ sc = SupplyChain(26)
 
 ordering_cost = 100
 
-product = Product("Product 1"; unit_holding_cost=0.01)
+product = Product("Product 1")
 add_product!(sc, product)
 
 supplier = Supplier("Supplier 1", Seattle)
@@ -26,7 +27,7 @@ add_supplier!(sc, supplier)
 storage = Storage("Storage 1", Seattle; 
             fixed_cost= 0, 
             initial_opened=true)
-add_product!(storage, product; additional_stock_cover=0, initial_inventory=nothing)
+add_product!(storage, product; additional_stock_cover=0, initial_inventory=nothing, unit_holding_cost=0.01)
 add_storage!(sc, storage)
 
 customer = Customer("Customer 1", Seattle)

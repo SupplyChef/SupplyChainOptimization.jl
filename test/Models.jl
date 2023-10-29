@@ -50,12 +50,12 @@ function create_model_plant_storage_customer(;horizon=1, customer_count=1, produ
     #plant -> storage -> customer
     sc = SupplyChain(horizon)
 
-    product = Product("p1"; unit_holding_cost=product_unit_holding_cost)
+    product = Product("p1")
     add_product!(sc, product)
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
     add_storage!(sc, storage)
-    add_product!(storage, product)
+    add_product!(storage, product; unit_holding_cost=product_unit_holding_cost)
     
     plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
     add_plant!(sc, plant)

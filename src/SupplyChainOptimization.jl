@@ -1,5 +1,7 @@
 module SupplyChainOptimization
 
+using SupplyChainModeling
+
 include("Modeling.jl")
 include("Querying.jl")
 include("Visualization.jl")
@@ -8,24 +10,7 @@ using Base: Bool, product
 using JuMP
 using HiGHS
 
-export SupplyChain, 
-      Product, 
-      Customer, 
-      Storage, 
-      Supplier, 
-      Plant, 
-      Lane, 
-      Location,
-      Demand,
-      Node,
-      add_lane!,
-      add_product!,
-      add_customer!,
-      add_storage!,
-      add_supplier!,
-      add_demand!,
-      add_plant!,
-      optimize_network!,
+export optimize_network!,
       get_total_costs,
       get_total_fixed_costs,
       get_total_transportation_costs,
@@ -221,7 +206,7 @@ function create_network_optimization_model(supply_chain, optimizer, bigM=1_000_0
     @constraint(m, [t=times], total_fixed_costs_per_period[t] == sum(opened[s, t] * s.fixed_cost for s in plants_storages))
     @constraint(m, total_fixed_costs == sum(total_fixed_costs_per_period[t] for t in times))
 
-    @constraint(m, [t=times], total_holding_costs_per_period[t] == sum(stored_at_end[p, s, t] * p.unit_holding_cost for p in products, s in storages))
+    @constraint(m, [t=times], total_holding_costs_per_period[t] == sum(stored_at_end[p, s, t] * get(s.unit_holding_cost, p, 0.0) for p in products, s in storages))
     @constraint(m, total_holding_costs == sum(total_holding_costs_per_period[t] for t in times))
 
     @constraint(m, [t=times], total_costs_per_period[t] == total_transportation_costs_per_period[t] + 

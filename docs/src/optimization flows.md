@@ -8,6 +8,7 @@ In the first example we consider four storage locations servicing 350 customers 
 ```
 using CSV
 using DataFrames
+using SupplyChainModeling
 using SupplyChainOptimization
 
 nm = tempname()

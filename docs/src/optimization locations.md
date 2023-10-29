@@ -4,6 +4,7 @@ In this section we will see how to find the best network to service customer dem
 ```
 using CSV
 using DataFrames
+using SupplyChainModeling
 using SupplyChainOptimization
 
 nm = tempname()

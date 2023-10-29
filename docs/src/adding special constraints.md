@@ -30,6 +30,7 @@ using CSV
 using DataFrames
 using JuMP
 using HiGHS
+using SupplyChainModeling
 using SupplyChainOptimization
 
 
@@ -43,8 +44,8 @@ sort!(us_cities, [:pop], rev=true)
 
 sc = SupplyChain(3)
 
-product1 = Product("Product 1"; unit_holding_cost=0.01)
-product2 = Product("Product 2"; unit_holding_cost=0.01)
+product1 = Product("Product 1")
+product2 = Product("Product 2")
 add_product!(sc, product1)
 add_product!(sc, product2)
 
@@ -66,7 +67,7 @@ for r in eachrow(first(us_cities, 10))
     storage = Storage("Storage $(r.name)", Location(r.lat + 0.2, r.lon + 0.2, r.name); 
             fixed_cost= 2_000_000 + r.pop / 2, 
             initial_opened=false)
-    add_product!(storage, product2; initial_inventory=0)
+    add_product!(storage, product2; initial_inventory=0, unit_holding_cost=0.01)
     add_storage!(sc, storage)
 end
 

@@ -9,6 +9,7 @@ DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
+SupplyChainModeling = "8a0b78ce-42db-494b-a45c-80b287de1a3d"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]

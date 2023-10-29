@@ -57,7 +57,7 @@ end
         #plant -> storage -> customer
         sc = SupplyChain(horizon)
 
-        product = Product("p1"; unit_holding_cost=0.01)
+        product = Product("p1")
         add_product!(sc, product)
 
         customer1 = Customer("c1", Seattle)
@@ -70,7 +70,7 @@ end
 
         storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_storage!(sc, storage)
-        add_product!(storage, product)
+        add_product!(storage, product; unit_holding_cost=0.01)
 
         plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_plant!(sc, plant)
@@ -100,7 +100,7 @@ end
         #plant -> storage -> customer
         sc = SupplyChain(horizon)
 
-        product = Product("p1"; unit_holding_cost=0.01)
+        product = Product("p1")
         add_product!(sc, product)
 
         customer1 = Customer("c1", Seattle)
@@ -113,7 +113,7 @@ end
 
         storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_storage!(sc, storage)
-        add_product!(storage, product)
+        add_product!(storage, product; unit_holding_cost=0.01)
 
         plant = Plant("plant1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_plant!(sc, plant)
