@@ -1,34 +1,11 @@
 # Reference
 
-## Types
-```@docs
-SupplyChain
-Location
-Node
-Product
-Customer
-Lane
-Plant
-Storage
-Supplier
-Demand
-```
-
-## Modeling
-```@docs
-add_plant!
-add_supplier!
-add_storage!
-add_customer!
-add_product!
-add_demand!
-add_lane!
-haversine
-```
-
 ## Optimization
 ```@docs
 optimize_network!
+SupplyChainOptimization.create_network_optimization_model
+SupplyChainOptimization.create_network_optimization_model!
+SupplyChainOptimization.optimize_network_optimization_model!
 ```
 
 ## Querying Results
