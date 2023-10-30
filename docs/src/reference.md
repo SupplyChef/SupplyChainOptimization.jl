@@ -6,6 +6,7 @@ optimize_network!
 SupplyChainOptimization.create_network_optimization_model
 SupplyChainOptimization.create_network_optimization_model!
 SupplyChainOptimization.optimize_network_optimization_model!
+haversine
 ```
 
 ## Querying Results
