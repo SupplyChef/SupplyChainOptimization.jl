@@ -3,6 +3,7 @@ Pkg.add("CSV")
 Pkg.add("DataFrames")
 Pkg.add("JuMP")
 Pkg.add("HiGHS")
+Pkg.add("SupplyChainModeling")
 
 using Documenter
 using SupplyChainOptimization
