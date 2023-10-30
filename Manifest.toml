@@ -2,7 +2,7 @@
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "f48f06592fbd78c52afd834891e4cc65e0f26f45"
+project_hash = "0e48bc466439a0d41cfc1e9ca3993491eabd2b39"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -559,9 +559,9 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "5.10.1+6"
 
 [[deps.SupplyChainModeling]]
-git-tree-sha1 = "c726c112291cf0b828be821ec2bb7055dfacf794"
+git-tree-sha1 = "2447b94d8ee2121cd8c8511e5a1a49c20d54a045"
 uuid = "8a0b78ce-42db-494b-a45c-80b287de1a3d"
-version = "0.1.1"
+version = "0.1.2"
 
 [[deps.TOML]]
 deps = ["Dates"]
