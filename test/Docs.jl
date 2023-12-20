@@ -26,7 +26,7 @@ using SupplyChainOptimization
 
     customer = Customer("Customer 1", Seattle)
     add_customer!(sc, customer)
-    add_demand!(sc, customer, product; demand=[100.0 for i in 1:sc.horizon])
+    add_demand!(sc, customer, product, [100.0 for i in 1:sc.horizon])
 
     lane = Lane(supplier, storage; minimum_quantity=1.0)
     add_lane!(sc, lane)
@@ -63,7 +63,7 @@ end
 
     customer = Customer("Customer 1", Seattle)
     add_customer!(sc, customer)
-    add_demand!(sc, customer, product; demand=[100.0 for i in 1:sc.horizon])
+    add_demand!(sc, customer, product, [100.0 for i in 1:sc.horizon])
 
     lane = Lane(supplier, storage; minimum_quantity=1.0, fixed_cost=ordering_cost)
     add_lane!(sc, lane)

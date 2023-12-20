@@ -62,11 +62,11 @@ end
 
         customer1 = Customer("c1", Seattle)
         add_customer!(sc, customer1)
-        add_demand!(sc, customer1, product; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer1, product, repeat([100.0], horizon))
 
         customer2 = Customer("c2", Seattle)
         add_customer!(sc, customer2)
-        add_demand!(sc, customer2, product; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer2, product, repeat([100.0], horizon))
 
         storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_storage!(sc, storage)
@@ -105,11 +105,11 @@ end
 
         customer1 = Customer("c1", Seattle)
         add_customer!(sc, customer1)
-        add_demand!(sc, customer1, product; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer1, product, repeat([100.0], horizon))
 
         customer2 = Customer("c2", Seattle)
         add_customer!(sc, customer2)
-        add_demand!(sc, customer2, product; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer2, product, repeat([100.0], horizon))
 
         storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=Inf, initial_opened=false)
         add_storage!(sc, storage)

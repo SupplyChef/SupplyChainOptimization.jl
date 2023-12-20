@@ -16,7 +16,7 @@ function parse_simple_data(file_name)
     for f in 1:customer_count
         customer = Customer("c$f", Location(0, 0))
         add_customer!(sc, customer)
-        add_demand!(sc, customer, product; demand=[1.0])
+        add_demand!(sc, customer, product, [1.0])
         push!(customers, customer)
     end
 
@@ -66,7 +66,7 @@ function parse_orlib_data_uncap(file_name)
         number_index += 1
         customer = Customer("c$c", Location(0, 0))
         add_customer!(sc, customer)
-        add_demand!(sc, customer, product; demand=[1.0])
+        add_demand!(sc, customer, product, [1.0])
         
         for f in 1:facility_count
             #println(numbers[number_index])
@@ -114,7 +114,7 @@ function parse_orlib_data_cap(file_name, capacity=nothing)
         number_index += 1
         customer = Customer("c$c", Location(0, 0))
         add_customer!(sc, customer)
-        add_demand!(sc, customer, product; demand=[demand])
+        add_demand!(sc, customer, product, [demand])
 
         for f in 1:facility_count
             #println(numbers[number_index])

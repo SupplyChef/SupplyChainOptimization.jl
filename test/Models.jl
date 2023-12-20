@@ -10,7 +10,7 @@ function create_model_storage_customer()
 
     c = Customer("c1", Seattle)
     add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0])
+    add_demand!(sc, c, product, [100.0])
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
     add_storage!(sc, storage)
@@ -30,7 +30,7 @@ function create_model_supplier_storage_customer()
 
     c = Customer("c1", Seattle)
     add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0])
+    add_demand!(sc, c, product, [100.0])
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
     add_storage!(sc, storage)
@@ -64,7 +64,7 @@ function create_model_plant_storage_customer(;horizon=1, customer_count=1, produ
     for i in 1:customer_count
         customer = Customer("c$i", Seattle)
         add_customer!(sc, customer)
-        add_demand!(sc, customer, product; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer, product, repeat([100.0], horizon))
         add_lane!(sc, Lane(storage, customer; fixed_cost=10.0, unit_cost=1.0))
     end
     
@@ -86,7 +86,7 @@ function create_test_model4()
     
     customer = Customer("c1", Seattle)
     add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0])
+    add_demand!(sc, customer, product2, [100.0])
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
     add_storage!(sc, storage)
@@ -114,7 +114,7 @@ function create_test_model5()
     add_product!(supplier, product1; unit_cost=0.0, maximum_throughput=Inf)
 
     customer = add_customer!(sc, Customer("c1", Seattle))
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
+    add_demand!(sc, customer, product2, [100.0, 100.0])
 
     storage = add_storage!(sc, Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false))
     add_product!(storage, product2)
@@ -148,7 +148,7 @@ function create_test_model6(; horizon=2, customer_count=500, storage_count=50)
     for i in 1:customer_count
         customer = Customer("c$i", Seattle)
         add_customer!(sc, customer)
-        add_demand!(sc, customer, product2; demand=repeat([100.0], horizon))
+        add_demand!(sc, customer, product2, repeat([100.0], horizon))
     end 
 
     for i in 1:storage_count
@@ -174,7 +174,7 @@ function create_test_model7()
 
     c = Customer("c1", Seattle)
     add_customer!(sc, c)
-    add_demand!(sc, c, product; demand=[100.0], service_level=0.0)
+    add_demand!(sc, c, product, [100.0]; service_level=0.0)
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=10.0, closing_cost=10.0, initial_opened=true)
     add_storage!(sc, storage)
@@ -200,7 +200,7 @@ function create_test_broken_model()
 
     customer = Customer("c1", Seattle)
     add_customer!(sc, customer)
-    #add_demand!(sc, customer, product2; demand=[100.0, 100.0])
+    #add_demand!(sc, customer, product2, [100.0, 100.0])
 
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
     add_storage!(sc, storage)
@@ -229,7 +229,7 @@ function create_test_infeasible_model()
     
     customer = Customer("c1", Seattle)
     add_customer!(sc, customer)
-    add_demand!(sc, customer, product2; demand=[100.0, 100.0])
+    add_demand!(sc, customer, product2, [100.0, 100.0])
     
     storage = Storage("s1", Seattle; fixed_cost=1000.0, opening_cost=500.0, closing_cost=500.0, initial_opened=false)
     add_storage!(sc, storage)
