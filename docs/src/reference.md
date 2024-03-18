@@ -6,6 +6,7 @@
 minimize_cost!
 maximize_profits!
 SupplyChainOptimization.create_network_cost_minimization_model
+SupplyChainOptimization.create_network_profit_maximization_model
 SupplyChainOptimization.create_network_cost_minimization_model!
 SupplyChainOptimization.optimize_network_optimization_model!
 haversine
@@ -14,6 +15,7 @@ haversine
 ## Querying Results
 
 ```@docs
+get_total_profits
 get_total_costs
 get_total_fixed_costs
 get_total_transportation_costs

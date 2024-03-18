@@ -76,33 +76,33 @@ function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer;
     optimize_network_optimization_model!(supply_chain)
 end
 
-"""
-    evaluate_disruption!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
+# """
+#     evaluate_disruption!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
-Optimizes the supply chain for profits given that a supplier cannot provide a product.
-"""
-function evaluate_disruption!(supply_chain::SupplyChain, supplier::Supplier, product::Product, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
-    supplier.maximum_throughput[product] = 0.0
-    create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
-    #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
-    set_attribute(supply_chain.optimization_model, "log_to_console", log)
-    set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
-    optimize_network_optimization_model!(supply_chain)
-end
+# Optimizes the supply chain for profits given that a supplier cannot provide a product.
+# """
+# function evaluate_disruption!(supply_chain::SupplyChain, supplier::Supplier, product::Product, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+#     supplier.maximum_throughput[product] = 0.0
+#     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
+#     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
+#     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+#     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
+#     optimize_network_optimization_model!(supply_chain)
+# end
 
-"""
-    evaluate_recovery!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
+# """
+#     evaluate_recovery!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
-Optimizes the supply chain for profits given that a product has been exhausted from the supply chain.
-"""
-function evaluate_recovery!(supply_chain::SupplyChain, product::Product, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
-    #TODO!
-    create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
-    #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
-    set_attribute(supply_chain.optimization_model, "log_to_console", log)
-    set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
-    optimize_network_optimization_model!(supply_chain)
-end
+# Optimizes the supply chain for profits given that a product has been exhausted from the supply chain.
+# """
+# function evaluate_recovery!(supply_chain::SupplyChain, product::Product, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+#     #TODO!
+#     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
+#     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
+#     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+#     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
+#     optimize_network_optimization_model!(supply_chain)
+# end
 
 """
 Creates an optimization model.
