@@ -1,3 +1,12 @@
+function get_sales_price(supply_chain, customer, product, time)
+    for demand in supply_chain.demand
+        if demand.customer == customer && demand.product == product
+            return demand.sales_price
+        end
+    end
+    return 0
+end
+
 function get_demand(supply_chain, customer, product, time)
     for demand in supply_chain.demand
         if demand.customer == customer && demand.product == product

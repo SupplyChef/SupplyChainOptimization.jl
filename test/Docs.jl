@@ -32,7 +32,7 @@ using SupplyChainOptimization
     add_lane!(sc, lane)
     add_lane!(sc, Lane(storage, customer; minimum_quantity=1.0))
 
-    SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
+    SupplyChainOptimization.create_network_cost_minimization_model!(sc, HiGHS.Optimizer)
     @objective(sc.optimization_model, Min, sum(sc.optimization_model[:used][lane, t] * ordering_cost for t in 1:sc.horizon) +
                                         sum(sc.optimization_model[:stored_at_end][product, storage, t-1] * get(storage.unit_holding_cost, product, 0.0) for t in 1:sc.horizon) )
     SupplyChainOptimization.optimize_network_optimization_model!(sc)
@@ -69,7 +69,7 @@ end
     add_lane!(sc, lane)
     add_lane!(sc, Lane(storage, customer; minimum_quantity=1.0))
 
-    SupplyChainOptimization.optimize_network!(sc)
+    SupplyChainOptimization.minimize_cost!(sc)
     println(objective_value(sc.optimization_model))
 
     plot_inventory(sc, storage, product)

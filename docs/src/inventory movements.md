@@ -39,7 +39,7 @@ lane = Lane(supplier, storage; minimum_quantity=1.0, fixed_cost=ordering_cost)
 add_lane!(sc, lane)
 add_lane!(sc, Lane(storage, customer; minimum_quantity=1.0))
 
-SupplyChainOptimization.optimize_network!(sc)
+SupplyChainOptimization.minimize_cost!(sc)
 ```
 
 Once solve we can display the inventory at the storage location.

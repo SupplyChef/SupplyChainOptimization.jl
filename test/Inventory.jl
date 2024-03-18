@@ -28,7 +28,7 @@ end
 
         lane = first(filter(l -> isa(l.origin, Plant), sc.lanes))
         
-        SupplyChainOptimization.optimize_network!(sc)
+        SupplyChainOptimization.minimize_cost!(sc)
     
         #println(value.(sc.optimization_model[:used]))
         println([get_shipments(sc, lane, product, t) for t in 1:100])
@@ -43,7 +43,7 @@ end
 
         product = first(sc.products)
 
-        SupplyChainOptimization.optimize_network!(sc)
+        SupplyChainOptimization.minimize_cost!(sc)
     
         #println(value.(sc.optimization_model[:used]))
         println("$(start - Dates.now())")
@@ -81,7 +81,7 @@ end
         lane2 = Lane(plant, storage; fixed_cost=0, unit_cost=1.0)
         add_lane!(sc, lane2)
 
-        SupplyChainOptimization.optimize_network!(sc)
+        SupplyChainOptimization.minimize_cost!(sc)
 
         #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
         #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 
@@ -124,7 +124,7 @@ end
         lane2 = Lane(plant, storage; fixed_cost=0.0, unit_cost=1.0)
         add_lane!(sc, lane2)
 
-        SupplyChainOptimization.optimize_network!(sc)
+        SupplyChainOptimization.minimize_cost!(sc)
     
         #println([get_shipments(sc, lane, customer1, product, t) for t in 1:horizon])
         #println([get_shipments(sc, lane, customer2, product, t) for t in 1:horizon]) 

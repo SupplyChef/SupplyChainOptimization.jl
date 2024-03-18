@@ -88,7 +88,7 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
+SupplyChainOptimization.create_network_cost_minimization_model!(sc, HiGHS.Optimizer)
 
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,1]) == 2)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,2]) == 1)

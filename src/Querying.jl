@@ -9,6 +9,16 @@ function get_total_costs(supply_chain::SupplyChain)
 end
 
 """
+    get_total_profits(supply_chain::SupplyChain)
+
+Gets the total profits of operating the supply chain.
+"""
+function get_total_profits(supply_chain::SupplyChain)
+    check(supply_chain)
+    return value(supply_chain.optimization_model[:total_profits])
+end
+
+"""
     get_total_fixed_costs(supply_chain::SupplyChain)
 
 Gets the total fixed costs of operating the supply chain.

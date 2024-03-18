@@ -1,15 +1,18 @@
 # Reference
 
 ## Optimization
+
 ```@docs
-optimize_network!
-SupplyChainOptimization.create_network_optimization_model
-SupplyChainOptimization.create_network_optimization_model!
+minimize_cost!
+maximize_profits!
+SupplyChainOptimization.create_network_cost_minimization_model
+SupplyChainOptimization.create_network_cost_minimization_model!
 SupplyChainOptimization.optimize_network_optimization_model!
 haversine
 ```
 
 ## Querying Results
+
 ```@docs
 get_total_costs
 get_total_fixed_costs
@@ -25,6 +28,7 @@ is_closing
 ```
 
 ## Visualization
+
 ```@docs
 plot_network
 plot_flows

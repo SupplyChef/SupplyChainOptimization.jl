@@ -117,7 +117,7 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-optimize_network!(sc)
+minimize_cost!(sc)
 
 The network can be visualized (see below). We can see that the optimal network has two clusters of plants/storage locations; one to service the West coast and one to service the East coast. Additionally two smaller storage locations are used as hubs to reduce overall costs.
 
