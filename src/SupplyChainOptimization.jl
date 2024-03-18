@@ -105,7 +105,7 @@ end
 # end
 
 """
-Creates an optimization model.
+Creates an optimization model for cost minimization.
 """
 function create_network_cost_minimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
     supply_chain.optimization_model = create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
@@ -113,7 +113,7 @@ function create_network_cost_minimization_model!(supply_chain, optimizer; single
 end
 
 """
-Creates an optimization model.
+Creates an optimization model for profit maximization.
 """
 function create_network_profit_maximization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
     supply_chain.optimization_model = create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
@@ -128,12 +128,18 @@ function optimize_network_optimization_model!(supply_chain)
     JuMP.optimize!(supply_chain.optimization_model)
 end
 
+"""
+Creates an optimization model for cost minimization.
+"""
 function create_network_cost_minimization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false)
     m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     @objective(m, Min, 1.0 * m[:total_costs])
     return m
 end
 
+"""
+Creates an optimization model for profit maximization.
+"""
 function create_network_profit_maximization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false)
     m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
     @objective(m, Max, 1.0 * m[:total_profits])
