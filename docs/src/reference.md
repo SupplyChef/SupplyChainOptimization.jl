@@ -10,6 +10,7 @@ SupplyChainOptimization.create_network_profit_maximization_model
 SupplyChainOptimization.create_network_cost_minimization_model!
 SupplyChainOptimization.create_network_profit_maximization_model!
 SupplyChainOptimization.optimize_network_optimization_model!
+SupplyChainOptimization.create_network_model
 haversine
 ```
 
