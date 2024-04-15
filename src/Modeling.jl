@@ -1,26 +1,20 @@
 function get_sales_price(supply_chain, customer, product, time)
-    for demand in supply_chain.demand
-        if demand.customer == customer && demand.product == product
-            return demand.sales_price
-        end
+    if haskey(supply_chain.demand_for, (customer, product))
+        return first(supply_chain.demand_for[(customer, product)]).sales_price
     end
     return 0
 end
 
 function get_demand(supply_chain, customer, product, time)
-    for demand in supply_chain.demand
-        if demand.customer == customer && demand.product == product
-            return demand.demand[time]
-        end
+    if haskey(supply_chain.demand_for, (customer, product))
+        return first(supply_chain.demand_for[(customer, product)]).demand[time]
     end
     return 0
 end
 
 function get_service_level(supply_chain, customer, product)
-    for demand in supply_chain.demand
-        if demand.customer == customer && demand.product == product
-            return demand.service_level
-        end
+    if haskey(supply_chain.demand_for, (customer, product))
+        return first(supply_chain.demand_for[(customer, product)]).service_level
     end
     return 1.0
 end
