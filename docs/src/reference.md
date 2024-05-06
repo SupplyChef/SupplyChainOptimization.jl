@@ -37,5 +37,9 @@ is_closing
 plot_network
 plot_flows
 plot_costs
+plot_financials
 plot_inventory
+animate_network
+animate_flows
+movie_network
 ```
