@@ -65,7 +65,7 @@ Gets the amount of a given product sent from a given storage location at a given
 """
 function get_shipments(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
     check(supply_chain)
-    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, storage))
+    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, storage); init=0.0)
 end
 
 """
@@ -75,7 +75,7 @@ Gets the amount of a given product sent from a given plant  at a given period.
 """
 function get_shipments(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
     check(supply_chain)
-    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, plant))
+    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, plant); init=0.0)
 end
 
 """
@@ -166,7 +166,7 @@ end
 
 function check(supply_chain)
     if isnothing(supply_chain.optimization_model) || 
-        !((termination_status(supply_chain.optimization_model) == JuMP.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.FEASIBLE_POINT))
+        !((termination_status(supply_chain.optimization_model) == JuMP.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.FEASIBLE_POINT) || has_values(supply_chain.optimization_model))
         throw(ErrorException("The optimize_network! function must be called first."))
     end
 end

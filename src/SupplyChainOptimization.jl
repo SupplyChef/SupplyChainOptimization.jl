@@ -28,7 +28,11 @@ export minimize_cost!,
       haversine,
       plot_flows,
       plot_costs,
+      animate_flows,
+      plot_financials,
       plot_network,
+      animate_network,
+      movie_network,
       plot_inventory
 
 function check_model(supply_chain)
@@ -58,7 +62,7 @@ Optimizes the supply chain for cost. The service level should be set to one to f
 function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
     create_network_cost_minimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
-    set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    #set_attribute(supply_chain.optimization_model, "log_to_console", log)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     optimize_network_optimization_model!(supply_chain)
 end
@@ -71,7 +75,7 @@ Optimizes the supply chain for profits. The service level should be set to zero 
 function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     #set_optimizer_attribute(supply_chain.optimization_model, "mip_heuristic_effort", 0.35)
-    set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    #set_attribute(supply_chain.optimization_model, "log_to_console", log)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     optimize_network_optimization_model!(supply_chain)
 end
@@ -109,15 +113,15 @@ Creates an optimization model for cost minimization.
 """
 function create_network_cost_minimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
     supply_chain.optimization_model = create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
-    set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
+    #set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
 
 """
 Creates an optimization model for profit maximization.
 """
-function create_network_profit_maximization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
-    supply_chain.optimization_model = create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
-    set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
+function create_network_profit_maximization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, relax=false, last_period_only=false)
+    supply_chain.optimization_model = create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=relax, last_period_only=last_period_only)
+    #set_optimizer_attribute(supply_chain.optimization_model, "primal_feasibility_tolerance", 1e-5)
 end
 
 
@@ -140,9 +144,13 @@ end
 """
 Creates an optimization model for profit maximization.
 """
-function create_network_profit_maximization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false)
-    m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
-    @objective(m, Max, 1.0 * m[:total_profits])
+function create_network_profit_maximization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false, relax=false, last_period_only=false)
+    m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=relax)
+    if last_period_only
+        @objective(m, Max, 1.0 * m[:total_revenues_per_period][supply_chain.horizon] - m[:total_costs_per_period][supply_chain.horizon])
+    else
+        @objective(m, Max, 1.0 * m[:total_profits])
+    end
     return m
 end
 

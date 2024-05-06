@@ -43,7 +43,7 @@ function plot_network(supply_chain, period=1;
                                 legendgroup=group[2],
                                 showlegend=first,
                                 hoverinfo="text",
-                                text="$(element.name)",
+                                text="$(element.name) - $(sum(get_shipments(supply_chain, element, p, period) for p in supply_chain.products))",
                                 name=group[2],
                                 mode="makers",
                                 marker_symbol=group[3],
@@ -132,6 +132,29 @@ function plot_costs(supply_chain)
 end
 
 """
+    plot_financials(supply_chain)
+
+Plots the financial results of operating the supply chain.
+"""
+function plot_financials(supply_chain)
+    profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]).-value.(supply_chain.optimization_model[:total_costs_per_period]))
+    cum_profits = cumsum(profits, dims=1)
+
+    plot([scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_revenues_per_period]), name="revenues"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_costs_per_period]), name="costs"),
+        scatter(;x=1:supply_chain.horizon, y=profits, name="profits"),
+        scatter(;x=1:supply_chain.horizon, y=cum_profits, name="cumulative_profits"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_transportation_costs_per_period]), name="transportation costs"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_holding_costs_per_period]), name="holding costs"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_buying_costs_per_period]), name="buying costs"),
+        scatter(;x=1:supply_chain.horizon, y=[sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:supply_chain.horizon], name="warehouse fixed costs"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_opening_costs_per_period]), name="opening costs"),
+        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_closing_costs_per_period]), name="closing costs"),
+        ])
+end
+
+
+"""
     plot_flows(supply_chain, period=1; geography="usa", showlegend=true)
 
 Plots the flows of products in the supply chain. 
@@ -177,12 +200,16 @@ function plot_flows(supply_chain, period=1; geography="usa", showlegend=true, ex
     Plot(traces, layout)
 end
 
+"""
+    animate_network
+
+Creates an animation of the network through time.
+"""
 function animate_network(supply_chain; 
                          geography="usa", 
                          showlegend=true, 
                          excluded_nodes=[],
-                         groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), 
-                              (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
+                         groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
     origin_colors = Dict{Node, String}()
     ps = [plot_network(supply_chain, i; geography=geography, showlegend=showlegend, excluded_nodes=excluded_nodes, groups=groups) for i in 1:supply_chain.horizon]
 
@@ -286,6 +313,11 @@ function animate_network(supply_chain;
     return plotdata
 end
 
+"""
+    animate_flows; geography="usa", showlegend=true, excluded_origins=[])
+
+Creates an animation of the product flows through time.
+"""
 function animate_flows(supply_chain; geography="usa", showlegend=true, excluded_origins=[])
     origin_colors = Dict{Node, String}()
     ps = [plot_flows(supply_chain, i; geography=geography, showlegend=showlegend, excluded_origins=excluded_origins, origin_colors=origin_colors) for i in 1:supply_chain.horizon]
@@ -388,4 +420,32 @@ function animate_flows(supply_chain; geography="usa", showlegend=true, excluded_
     #save the plot and show it
     plotdata = Plot(trace, layout, frames)
     return plotdata
+end
+
+"""
+    movie_network
+
+Makes a movie of the network evolution.
+"""
+function movie_network(supply_chain, file_path; 
+                        geography="usa", 
+                        showlegend=true, 
+                        excluded_nodes=[],
+                        groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)]) 
+    ps = [plot_network(supply_chain, i; 
+                        geography=geography, 
+                        showlegend=showlegend, 
+                        excluded_nodes=excluded_nodes, 
+                        groups=groups) for i in 1:sc2.horizon]
+
+    fnames = []
+    mkdir("tmp")
+    for (i, p) in enumerate(ps)
+        fname = lpad(i, 6, "0") * ".png"
+        push!(fnames, fname)
+        savefig(p, "tmp/"*fname, width=700, height=500, scale=1)
+    end
+
+    anim = Plots.Animation("tmp", fnames)
+    Plots.buildanimation(anim, file_path; fps=1)
 end
