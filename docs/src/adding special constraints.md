@@ -6,14 +6,14 @@ SupplyChainOptimization contains many built-in concepts that enable the modeling
 
     Directly manipulating the optimization model requires advanced mathematical modeling knowledge and is not recommended unless absolutely necessary.
 
-When the `optimize_network!` function is called it calls two other functions: `create_network_optimization_model!` and `optimize_network_optimization_model!`.
-`create_network_optimization_model!` creates an optimization model and stores it in the supply chain `optimization_model` attribute (see [Optimization Model](@ref)). This process is seamless and usually operates behind the scene. However there are cases where knowning about this process can be helpful. One such case is if a specific constraint needs to be added to the optimization model.
+When the `minimize_costs!` function is called it calls two other functions: `create_network_cost_minimization_model!` and `optimize_network_optimization_model!`.
+`create_network_cost_minimization_model!` creates an optimization model and stores it in the supply chain `optimization_model` attribute (see [Optimization Model](@ref)). This process is seamless and usually operates behind the scene. However there are cases where knowing about this process can be helpful. One such case is if a specific constraint needs to be added to the optimization model.
 
 In the example below we will use the same setup as in the multi-period network optimization example (see [Multi-period Optimization](@ref)).
 The one difference is that we now want to control how many nodes can be opened in each time period. Such a constraint may be needed in real-life because the real-estate team, labor team or supply management team cannot handle too many opening at the same time. We will modify the usual call to the optimizer and break it into three parts: the creation of the optimization model, the addition of the constraint on openings, the call to the optimizer.
 
 ```
-SupplyChainOptimization.create_network_optimization_model!(sc, HiGHS.Optimizer)
+SupplyChainOptimization.create_network_cost_minimization_model!(sc, HiGHS.Optimizer)
 
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,1]) == 2)
 @constraint(sc.optimization_model, sum(sc.optimization_model[:opening][:,2]) == 1)

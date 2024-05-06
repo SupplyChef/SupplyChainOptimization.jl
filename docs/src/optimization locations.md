@@ -40,7 +40,7 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c; unit_cost=haversine(s.location, c.location) / 250))
 end
 
-optimize_network!(sc)
+minimize_cost!(sc)
 
 After optimizing the network we can visualize the results.
 

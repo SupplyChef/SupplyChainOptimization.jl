@@ -65,7 +65,7 @@ for c in sc.customers, s in sc.storages
     add_lane!(sc, Lane(s, c, haversine(s.location, c.location) / 250))
 end
 
-optimize_network!(sc, Cbc.Optimizer)
+minimize_cost!(sc, Cbc.Optimizer)
 
 The results show the network evolving in three phases:
 
