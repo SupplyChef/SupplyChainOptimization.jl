@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
