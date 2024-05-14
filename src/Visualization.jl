@@ -1,5 +1,7 @@
 using PlotlyJS
 using JuMP
+using DataFrames
+using Plots: Animation, buildanimation, mp4
 
 """
     plot_inventory(supply_chain, storage, product)
@@ -86,7 +88,7 @@ function plot_network(supply_chain, period=1;
                         legendgroup="customer",
                         showlegend=(i==1),
                         hoverinfo="text",
-                        text="$(customer.name)",
+                        text="$(customer.name) - $(sum(get_shipments(supply_chain, customer, p, period) for p in supply_chain.products))",
                         name="customers",
                         mode="makers",
                         marker_symbol="circle",
@@ -132,27 +134,48 @@ function plot_costs(supply_chain)
 end
 
 """
-    plot_financials(supply_chain)
+    get_financials(supply_chain; max_time=supply_chain.horizon)
+
+Gets the financial results of operating the supply chain.
+"""
+function get_financials(supply_chain; max_time=supply_chain.horizon)
+    profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]
+    cum_profits = cumsum(profits, dims=1)
+
+    DataFrame((Horizon = 1:max_time,
+               Profits = profits,
+               Cumulative_Profits = cum_profits,
+               Revenues = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time],
+               Costs = collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time],
+               Transportation_Costs = collect(value.(supply_chain.optimization_model[:total_transportation_costs_per_period]))[1:max_time],
+               Holding_Costs = collect(value.(supply_chain.optimization_model[:total_holding_costs_per_period]))[1:max_time],
+               Buying_Costs = collect(value.(supply_chain.optimization_model[:total_buying_costs_per_period]))[1:max_time],
+               Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
+               Opening_Costs = collect(value.(supply_chain.optimization_model[:total_opening_costs_per_period]))[1:max_time],
+               Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time]))
+end
+
+"""
+    plot_financials(supply_chain; max_time=supply_chain.horizon)
 
 Plots the financial results of operating the supply chain.
 """
-function plot_financials(supply_chain)
-    profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]).-value.(supply_chain.optimization_model[:total_costs_per_period]))
-    cum_profits = cumsum(profits, dims=1)
+function plot_financials(supply_chain; max_time=supply_chain.horizon, title="Supply chain financials")
+    financials = get_financials(supply_chain; max_time=max_time)
 
-    plot([scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_revenues_per_period]), name="revenues"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_costs_per_period]), name="costs"),
-        scatter(;x=1:supply_chain.horizon, y=profits, name="profits"),
-        scatter(;x=1:supply_chain.horizon, y=cum_profits, name="cumulative_profits"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_transportation_costs_per_period]), name="transportation costs"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_holding_costs_per_period]), name="holding costs"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_buying_costs_per_period]), name="buying costs"),
-        scatter(;x=1:supply_chain.horizon, y=[sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:supply_chain.horizon], name="warehouse fixed costs"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_opening_costs_per_period]), name="opening costs"),
-        scatter(;x=1:supply_chain.horizon, y=value.(supply_chain.optimization_model[:total_closing_costs_per_period]), name="closing costs"),
-        ])
+    plot([scatter(;x=financials.Horizon, y=financials.Revenues, name="revenues"),
+        scatter(;x=financials.Horizon, y=financials.Costs, name="costs"),
+        scatter(;x=financials.Horizon, y=financials.Profits, name="profits"),
+        scatter(;x=financials.Horizon, y=financials.Cumulative_Profits, name="cumulative_profits"),
+        scatter(;x=financials.Horizon, y=financials.Transportation_Costs, name="transportation costs"),
+        scatter(;x=financials.Horizon, y=financials.Holding_Costs, name="holding costs"),
+        scatter(;x=financials.Horizon, y=financials.Buying_Costs, name="buying costs"),
+        scatter(;x=financials.Horizon, y=financials.Warehouses_Fixed_Costs, name="warehouse fixed costs"),
+        scatter(;x=financials.Horizon, y=financials.Opening_Costs, name="opening costs"),
+        scatter(;x=financials.Horizon, y=financials.Closing_Costs, name="closing costs"),
+        ],
+        Layout(;title=title))
 end
-
 
 """
     plot_flows(supply_chain, period=1; geography="usa", showlegend=true)
@@ -436,10 +459,10 @@ function movie_network(supply_chain, file_path;
                         geography=geography, 
                         showlegend=showlegend, 
                         excluded_nodes=excluded_nodes, 
-                        groups=groups) for i in 1:sc2.horizon]
+                        groups=groups) for i in 1:supply_chain.horizon]
 
     fnames = []
-    mkdir("tmp")
+    mkpath("tmp")
     for (i, p) in enumerate(ps)
         fname = lpad(i, 6, "0") * ".png"
         push!(fnames, fname)
@@ -447,5 +470,5 @@ function movie_network(supply_chain, file_path;
     end
 
     anim = Plots.Animation("tmp", fnames)
-    Plots.buildanimation(anim, file_path; fps=1)
+    Plots.mp4(anim, file_path; fps=1)
 end

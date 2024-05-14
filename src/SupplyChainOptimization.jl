@@ -13,6 +13,7 @@ using HiGHS
 
 export minimize_cost!,
       maximize_profits!,
+      get_financials,
       get_total_profits,
       get_total_costs,
       get_total_fixed_costs,

@@ -59,6 +59,13 @@ end
 @test begin
     sc = create_model_storage_customer()
     SupplyChainOptimization.minimize_cost!(sc)
+    plot_financials(sc)
+    true
+end
+
+@test begin
+    sc = create_model_storage_customer()
+    SupplyChainOptimization.minimize_cost!(sc)
     plot_flows(sc)
     animate_flows(sc)
     plot_network(sc)

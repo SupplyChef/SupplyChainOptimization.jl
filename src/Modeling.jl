@@ -5,13 +5,6 @@ function get_sales_price(supply_chain, customer, product, time)
     return 0
 end
 
-function get_demand(supply_chain, customer, product, time)
-    if haskey(supply_chain.demand_for, (customer, product))
-        return first(supply_chain.demand_for[(customer, product)]).demand[time]
-    end
-    return 0
-end
-
 function get_service_level(supply_chain, customer, product)
     if haskey(supply_chain.demand_for, (customer, product))
         return first(supply_chain.demand_for[(customer, product)]).service_level
@@ -42,14 +35,6 @@ function get_bom(production, output, input)
         end
     end
     return Inf
-end
-
-function get_maximum_throughput(node, product)
-    if(haskey(node.maximum_throughput, product))
-        return node.maximum_throughput[product]
-    else
-        return 0
-    end
 end
 
 function get_additional_stock_cover(node, product)

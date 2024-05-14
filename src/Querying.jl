@@ -71,7 +71,7 @@ end
 """
     get_shipments(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
 
-Gets the amount of a given product sent from a given plant  at a given period.
+Gets the amount of a given product sent from a given plant at a given period.
 """
 function get_shipments(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
     check(supply_chain)
@@ -110,6 +110,16 @@ function get_shipments(supply_chain::SupplyChain, lane::Lane, destination, produ
         return 0
     end
     return value(supply_chain.optimization_model[:received][product, lane, destination, period + lane.times[index]])
+end
+
+"""
+    get_shipments(supply_chain::SupplyChain, customer::Customer, product::Product, period=1)
+
+Gets the amount of a given product received by a given customer at a given period.
+"""
+function get_shipments(supply_chain::SupplyChain, customer::Customer, product::Product, period=1)
+    check(supply_chain)
+    return sum(value(supply_chain.optimization_model[:received][product, l, customer, period]) for l in get_lanes_in(supply_chain, customer); init=0.0)
 end
 
 """
