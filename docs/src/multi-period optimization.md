@@ -4,6 +4,7 @@ In this section we will see how to use SupplyChainOptimization for multi-period 
 where demand is expected to grow over time. The setup is similar to the one in [Locations Optimization](@ref) with the difference that
 we are looking at 15 years of data instead of 1.
 
+```
 using CSV
 using DataFrames
 using Cbc
@@ -66,6 +67,7 @@ for c in sc.customers, s in sc.storages
 end
 
 minimize_cost!(sc, Cbc.Optimizer)
+```
 
 The results show the network evolving in three phases:
 

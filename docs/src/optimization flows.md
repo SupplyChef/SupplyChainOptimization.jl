@@ -5,6 +5,7 @@ In this section we will see how to best flow products through the supply chain. 
 
 In the first example we consider four storage locations servicing 350 customers distributed throughout the US. The aim is to find which storage location service which customer. The setup is done as in the following code.
 
+```
 using CSV
 using DataFrames
 using SupplyChainModeling
@@ -45,6 +46,7 @@ for c in sc.customers, s in sc.storages
 end
 
 minimize_cost!(sc)
+```
 
 We can visualize the results.
 
