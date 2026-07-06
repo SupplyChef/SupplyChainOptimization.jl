@@ -46,7 +46,7 @@ jobs:
       # maximum_units/overflow_unit_cost support. Remove this step once that
       # branch is merged and released as a new version, and bump the
       # SupplyChainModeling compat bound instead.
-      - run: julia --project=. -e 'using Pkg; Pkg.develop(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="claude/supplychainsim-product-strategy-vt1s5a")'
+      - run: julia --project=. -e 'using Pkg; Pkg.add(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="claude/supplychainsim-product-strategy-vt1s5a")'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
