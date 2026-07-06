@@ -137,9 +137,13 @@ end
     end
 
     @test begin
-        # maximum_units caps how much can be stored at once; add_product! did
-        # not expose it until now, so this constraint (already present in
-        # the model, see stored_at_end <= get_maximum_storage(...)) was
+        # maximum_units is a soft cap, like lost_sales is for demand: the
+        # optimizer may store more than maximum_units, but pays
+        # overflow_unit_cost per unit per period for the excess (see
+        # `overflow` in src/Optimization.jl). A high enough overflow cost
+        # makes exceeding capacity uneconomical in practice, which is what
+        # we check here. add_product! did not expose maximum_units until
+        # now, so this constraint (already present in the model) was
         # previously untestable/unreachable through the public API.
         horizon = 20
 
@@ -154,7 +158,7 @@ end
 
         storage = Storage("s1", Seattle; initial_opened=true)
         add_storage!(sc, storage)
-        add_product!(storage, product; unit_holding_cost=0.01, maximum_units=15.0)
+        add_product!(storage, product; unit_holding_cost=0.01, maximum_units=15.0, overflow_unit_cost=1000.0)
 
         supplier = Supplier("supplier1", Seattle)
         add_supplier!(sc, supplier)
@@ -167,6 +171,45 @@ end
 
         SupplyChainOptimization.minimize_cost!(sc)
 
+        all(get_overflow(sc, storage, product, t) == 0.0 for t in 1:horizon) &&
         all(get_inventory_at_end(sc, storage, product, t) <= 15.0 for t in 1:horizon)
+    end
+
+    @test begin
+        # With overflow_unit_cost left at its default (0.0), maximum_units
+        # is effectively a non-binding preference rather than an enforced
+        # limit - exceeding it is free, so nothing stops the optimizer from
+        # doing so if it's otherwise convenient. This documents that this is
+        # intentional (mirrors lost_sales's cost-driven softness), not a bug.
+        horizon = 5
+
+        sc = SupplyChain(horizon)
+
+        product = Product("p1")
+        add_product!(sc, product)
+
+        customer = Customer("c1", Seattle)
+        add_customer!(sc, customer)
+        add_demand!(sc, customer, product, repeat([100.0], horizon))
+
+        storage = Storage("s1", Seattle; initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; unit_holding_cost=0.01, maximum_units=1.0)
+
+        supplier = Supplier("supplier1", Seattle)
+        add_supplier!(sc, supplier)
+        add_product!(supplier, product; unit_cost=1.0)
+
+        lane = Lane(storage, customer; unit_cost=1.0)
+        add_lane!(sc, lane)
+        lane2 = Lane(supplier, storage; unit_cost=1.0, minimum_quantity=100.0)
+        add_lane!(sc, lane2)
+
+        SupplyChainOptimization.minimize_cost!(sc)
+
+        # demand forces buying (and briefly storing) 100 units at a time via
+        # the minimum_quantity lane, far more than maximum_units=1 allows;
+        # with overflow free, the model has no reason to avoid it.
+        any(get_overflow(sc, storage, product, t) > 0.0 for t in 1:horizon)
     end
 end
