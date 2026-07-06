@@ -181,7 +181,13 @@ end
         # limit - exceeding it is free, so nothing stops the optimizer from
         # doing so if it's otherwise convenient. This documents that this is
         # intentional (mirrors lost_sales's cost-driven softness), not a bug.
-        horizon = 5
+        #
+        # minimum_quantity (300) is 3x a single period's demand (100) over a
+        # 3-period horizon, forcing the whole 300-unit lot to be bought at
+        # once and held down across periods - buying and selling exactly
+        # 100 within the same period (which never touches stored_at_end at
+        # all) isn't an option here, unlike a batch sized to match demand.
+        horizon = 3
 
         sc = SupplyChain(horizon)
 
@@ -202,7 +208,7 @@ end
 
         lane = Lane(storage, customer; unit_cost=1.0)
         add_lane!(sc, lane)
-        lane2 = Lane(supplier, storage; unit_cost=1.0, minimum_quantity=100.0)
+        lane2 = Lane(supplier, storage; unit_cost=1.0, minimum_quantity=300.0)
         add_lane!(sc, lane2)
 
         SupplyChainOptimization.minimize_cost!(sc)
