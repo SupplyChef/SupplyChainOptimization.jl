@@ -132,7 +132,41 @@ end
 
         println("$(start - Dates.now())")
         [get_shipments(sc, lane, customer1, product, t) for t in 1:horizon] == repeat([50.0], horizon) &&
-        [get_shipments(sc, lane, customer2, product, t) for t in 1:horizon] == repeat([50.0], horizon) 
+        [get_shipments(sc, lane, customer2, product, t) for t in 1:horizon] == repeat([50.0], horizon)
         [get_shipments(sc, lane2, product, t) for t in 1:horizon] == repeat([100.0], horizon)
+    end
+
+    @test begin
+        # maximum_units caps how much can be stored at once; add_product! did
+        # not expose it until now, so this constraint (already present in
+        # the model, see stored_at_end <= get_maximum_storage(...)) was
+        # previously untestable/unreachable through the public API.
+        horizon = 20
+
+        sc = SupplyChain(horizon)
+
+        product = Product("p1")
+        add_product!(sc, product)
+
+        customer = Customer("c1", Seattle)
+        add_customer!(sc, customer)
+        add_demand!(sc, customer, product, repeat([10.0], horizon))
+
+        storage = Storage("s1", Seattle; initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; unit_holding_cost=0.01, maximum_units=15.0)
+
+        supplier = Supplier("supplier1", Seattle)
+        add_supplier!(sc, supplier)
+        add_product!(supplier, product; unit_cost=1.0)
+
+        lane = Lane(storage, customer; unit_cost=1.0)
+        add_lane!(sc, lane)
+        lane2 = Lane(supplier, storage; unit_cost=1.0)
+        add_lane!(sc, lane2)
+
+        SupplyChainOptimization.minimize_cost!(sc)
+
+        all(get_inventory_at_end(sc, storage, product, t) <= 15.0 for t in 1:horizon)
     end
 end
