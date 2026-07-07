@@ -36,6 +36,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, total_buying_costs_per_period[times] >= 0)
     @variable(m, total_fixed_costs_per_period[times] >= 0)
     @variable(m, total_holding_costs_per_period[times] >= 0)
+    @variable(m, total_overflow_costs >= 0)
+    @variable(m, total_overflow_costs_per_period[times] >= 0)
 
     if !relax
         @variable(m, opened[plants_storages, times], Bin)
@@ -58,6 +60,11 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, used[l=lanes, times; l.minimum_quantity > 0 || l.fixed_cost > 0], Bin)
     @variable(m, sent[products, lanes, times] >= 0)
     @variable(m, received[products, l=lanes, d=l.destinations, times] >= 0)
+
+    # Inventory beyond a storage's maximum_units: allowed (not infeasible), like lost_sales
+    # for demand, but costed via overflow_unit_cost instead of bounded by a policy cap -
+    # capacity is an economic tradeoff here, not a hard business promise.
+    @variable(m, overflow[p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))] >= 0)
 
     if single_source
         @variable(m, serviced_by[products, storages, customers, times], Bin)
@@ -87,7 +94,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     #@constraint(m, [s=storages, t=times], !opened[s, t] => { sum(received[p, l, t] for p in products, l in get_lanes_in(supply_chain, s)) == 0 })
     @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])
 
-    @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p) * opened[s, t])
+    @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p) * opened[s, t] + overflow[p, s, t])
     
     ##@constraint(m, [s=plants_storages; s.must_be_opened_at_end], opened[s, supply_chain.horizon] == 1)
     ##@constraint(m, [s=plants_storages; s.must_be_closed_at_end], opened[s, supply_chain.horizon] == 0)
@@ -148,6 +155,9 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [t=times], total_holding_costs_per_period[t] == sum(stored_at_end[p, s, t] * get(s.unit_holding_cost, p, 0.0) for p in products, s in storages))
     @constraint(m, total_holding_costs == sum(total_holding_costs_per_period[t] for t in times))
 
+    @constraint(m, [t=times], total_overflow_costs_per_period[t] == sum(overflow[p, s, t] * get_overflow_cost(s, p) for p in products, s in storages if !isinf(get_maximum_storage(s, p)); init=0.0))
+    @constraint(m, total_overflow_costs == sum(total_overflow_costs_per_period[t] for t in times))
+
     @constraint(m, [t=times], total_buying_costs_per_period[t] == sum(bought[p, s, t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p); init=0.0))
     @constraint(m, [t=times], total_opening_costs_per_period[t] == sum(opening[s, t] * s.opening_cost for s in plants_storages if !isinf(s.opening_cost); init=0.0))
     @constraint(m, [t=times], total_closing_costs_per_period[t] == sum(closing[s, t] * s.closing_cost for s in plants_storages if !isinf(s.closing_cost); init=0.0))
@@ -160,7 +170,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        total_buying_costs_per_period[t] +
                        sum(produced[p, s, t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p)) +
                        sum(l.fixed_cost * used[l, t] for l in lanes if l.fixed_cost > 0) +
-                       total_holding_costs_per_period[t])
+                       total_holding_costs_per_period[t] +
+                       total_overflow_costs_per_period[t])
 
     @constraint(m, [t=times], total_revenues_per_period[t] == sum((get_sales_price(supply_chain, c, p, t) * (get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])) for p in products for c in customers))
     @constraint(m, total_revenues == sum(supply_chain.discount_factor ^ (t-1) * total_revenues_per_period[t] for t in times))

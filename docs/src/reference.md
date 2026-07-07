@@ -24,6 +24,7 @@ get_total_fixed_costs
 get_total_transportation_costs
 get_inventory_at_start
 get_inventory_at_end
+get_overflow
 get_production
 get_receipts
 get_shipments

@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.3.1"
+version = "0.3.2"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -23,3 +23,11 @@ Plots = "1.40"
 StatsBase = "0.34"
 SupplyChainModeling = "0.2"
 julia = "1.10"
+
+# TEMPORARY: points at the unreleased SupplyChainModeling branch adding
+# maximum_units/overflow_unit_cost support to add_product! (needed to
+# actually exercise the storage-capacity constraint below in tests).
+# Remove this section and bump the SupplyChainModeling compat bound once
+# that branch is merged and released as a new version.
+[sources]
+SupplyChainModeling = {url = "https://github.com/SupplyChef/SupplyChainModeling.jl", rev = "claude/supplychainsim-product-strategy-vt1s5a"}

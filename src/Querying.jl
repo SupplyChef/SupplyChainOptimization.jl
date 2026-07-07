@@ -174,6 +174,19 @@ function get_inventory_at_end(supply_chain::SupplyChain, storage::Storage, produ
     return value(supply_chain.optimization_model[:stored_at_end][product, storage, period]) 
 end
 
+"""
+Gets the amount of inventory of a product held beyond a storage's maximum_units
+(in temporary/overflow storage) at the end of a period.
+"""
+function get_overflow(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
+    check(supply_chain)
+    overflow = supply_chain.optimization_model[:overflow]
+    if !haskey(overflow, (product, storage, period))
+        return 0.0
+    end
+    return value(overflow[product, storage, period])
+end
+
 function check(supply_chain)
     if isnothing(supply_chain.optimization_model) || 
         !((termination_status(supply_chain.optimization_model) == JuMP.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.FEASIBLE_POINT) || has_values(supply_chain.optimization_model))
