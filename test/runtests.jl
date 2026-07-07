@@ -14,6 +14,7 @@ include("Inventory.jl")
 include("UFLlib.jl")
 include("Profits.jl")
 include("Disruptions.jl")
+include("GSM.jl")
 
 include("UnitTests.jl")
 

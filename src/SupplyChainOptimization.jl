@@ -6,6 +6,7 @@ include("Modeling.jl")
 include("Querying.jl")
 include("Visualization.jl")
 include("Optimization.jl")
+include("GSM.jl")
 
 using Base: Bool, product
 using JuMP
@@ -35,7 +36,14 @@ export minimize_cost!,
       plot_network,
       animate_network,
       movie_network,
-      plot_inventory
+      plot_inventory,
+      compute_safety_stock_gsm,
+      GSMResult,
+      get_incoming_service_time,
+      get_outgoing_service_time,
+      get_net_replenishment_time,
+      get_safety_stock,
+      get_total_safety_stock_cost
 
 function check_model(supply_chain)
     for production in supply_chain.plants
