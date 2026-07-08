@@ -153,9 +153,13 @@ function compute_safety_stock_gsm(supply_chain::SupplyChain, product::Product; s
         end
     end
 
-    relevant_storages = Set(s for s in supply_chain.storages if haskey(s.unit_holding_cost, product))
-    relevant_suppliers = Set(s for s in supply_chain.suppliers if haskey(s.unit_cost, product))
-    relevant_nodes = union(relevant_storages, relevant_suppliers)
+    relevant_nodes = Set{Node}()
+    for s in supply_chain.storages
+        haskey(s.unit_holding_cost, product) && push!(relevant_nodes, s)
+    end
+    for s in supply_chain.suppliers
+        haskey(s.unit_cost, product) && push!(relevant_nodes, s)
+    end
 
     children = Dict{Node, Vector{Node}}(n => Node[] for n in relevant_nodes)
     lead_time = Dict{Node, Int64}(n => 0 for n in relevant_nodes)
@@ -204,10 +208,10 @@ function compute_safety_stock_gsm(supply_chain::SupplyChain, product::Product; s
         end
     end
 
-    roots = [n for n in relevant_nodes if get(parent_count, n, 0) == 0]
+    roots = Node[n for n in relevant_nodes if get(parent_count, n, 0) == 0]
 
     reachable = Set{Node}()
-    to_visit = collect(roots)
+    to_visit = Node[roots...]
     while !isempty(to_visit)
         node = pop!(to_visit)
         node in reachable && continue
