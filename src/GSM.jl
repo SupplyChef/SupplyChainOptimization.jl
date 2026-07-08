@@ -1,13 +1,9 @@
 using Statistics
 
-"""
-    _standard_normal_quantile(p::Real)
-
-Approximates the inverse CDF (quantile function) of the standard normal distribution,
-using Peter Acklam's rational approximation (relative error < 1.15e-9 over (0,1)). Kept
-as a small self-contained helper rather than adding Distributions.jl as a dependency for
-a single function.
-"""
+# Approximates the inverse CDF (quantile function) of the standard normal distribution,
+# using Peter Acklam's rational approximation (relative error < 1.15e-9 over (0,1)). Kept
+# as a small self-contained helper rather than adding Distributions.jl as a dependency for
+# a single function. Not exported - internal to GSM's z-score computation.
 function _standard_normal_quantile(p::Real)
     if p <= 0.0 || p >= 1.0
         throw(DomainError(p, "p must be strictly between 0.0 and 1.0"))
