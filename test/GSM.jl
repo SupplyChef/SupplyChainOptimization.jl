@@ -13,10 +13,20 @@ using Statistics
 end
 
 @test begin
-    # Serial chain Supplier -> DC -> Customer, single feasible outgoing service time at DC
-    # (maximum_customer_wait=0 and DC's own lead time forces S_DC=0), so this mainly checks
-    # the basic plumbing (sigma from demand variance, service-time propagation, safety
-    # stock formula) rather than a real optimization choice.
+    # Validates against the standard, textbook single-stage safety-stock formula
+    # (SS = z * sigma_L, sigma_L = sigma_period * sqrt(L) under iid period demand - see
+    # e.g. Chopra & Meindl, "Supply Chain Management", or any standard OR/inventory
+    # textbook's safety-stock chapter), rather than a specific number transcribed from
+    # the Graves & Willems paper itself (which risks a transcription error we can't
+    # verify without the paper in hand - the same honesty-over-unverified-precision
+    # tradeoff already made elsewhere in this plan, e.g. preferring Peloton/Instant Pot
+    # with verified facts over an unverified CrockPot claim).
+    #
+    # A single Supplier -> DC -> Customer chain is exactly the case where GSM must
+    # reduce to that formula: maximum_customer_wait=0 and DC's own lead time force
+    # S_DC=0, so DC's net replenishment time is just the total lead time L, with no
+    # real optimization choice left - this is the base case the richer branching-tree
+    # test below builds on.
     product = Product("p1")
 
     sc = SupplyChain(10)
