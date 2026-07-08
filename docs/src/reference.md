@@ -33,6 +33,18 @@ is_opening
 is_closing
 ```
 
+## Safety Stock Placement (GSM)
+
+```@docs
+compute_safety_stock_gsm
+GSMResult
+get_incoming_service_time
+get_outgoing_service_time
+get_net_replenishment_time
+get_safety_stock
+get_total_safety_stock_cost
+```
+
 ## Visualization
 
 ```@docs
