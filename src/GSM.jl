@@ -63,6 +63,7 @@ struct GSMResult
     z::Float64
     incoming_service_time::Dict{Node, Int64}
     outgoing_service_time::Dict{Node, Int64}
+    net_replenishment_time::Dict{Node, Int64}
     safety_stock::Dict{Node, Float64}
 end
 
@@ -91,7 +92,7 @@ Gets the net replenishment time (incoming service time + lead time - outgoing se
 number of periods node must cover demand from its own safety stock.
 """
 function get_net_replenishment_time(result::GSMResult, node::Node)
-    return get(result.incoming_service_time, node, 0) - get(result.outgoing_service_time, node, 0)
+    return get(result.net_replenishment_time, node, 0)
 end
 
 """
@@ -289,11 +290,13 @@ function compute_safety_stock_gsm(supply_chain::SupplyChain, product::Product; s
         assign!(root, 0)
     end
 
+    net_replenishment_time = Dict{Node, Int64}()
     safety_stock = Dict{Node, Float64}()
     for node in relevant_nodes
-        net_replenishment_time = incoming_service_time[node] + lead_time[node] - outgoing_service_time[node]
-        safety_stock[node] = z * sigma[node] * sqrt(net_replenishment_time)
+        nrt = incoming_service_time[node] + lead_time[node] - outgoing_service_time[node]
+        net_replenishment_time[node] = nrt
+        safety_stock[node] = z * sigma[node] * sqrt(nrt)
     end
 
-    return GSMResult(product, Float64(service_level), z, incoming_service_time, outgoing_service_time, safety_stock)
+    return GSMResult(product, Float64(service_level), z, incoming_service_time, outgoing_service_time, net_replenishment_time, safety_stock)
 end
