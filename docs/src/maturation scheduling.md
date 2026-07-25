@@ -8,10 +8,11 @@ off against a quality/weight target and against a delivery commitment (a quota) 
 end.
 
 [`create_maturation_scheduling_model`](@ref) solves this problem: given a set of
-[`MaturationSource`](@ref)s (each holding at most one batch per planning horizon, "all-in-all-out")
-and a set of [`QuotaSink`](@ref)s (each with a soft periodic delivery target), it chooses each
+`MaturationSource`s (each holding at most one batch per planning horizon, "all-in-all-out")
+and a set of `QuotaSink`s (each with a soft periodic delivery target), it chooses each
 source's start day, ship day, and destination sink to minimize transportation cost, value-deviation
-penalties, and quota-deviation penalties.
+penalties, and quota-deviation penalties. Both types are defined in
+[SupplyChainModeling.jl](https://SupplyChef.github.io/SupplyChainModeling.jl/dev).
 
 This generalizes the integrated poultry production-distribution problem (IPPDP) of Gbéya, Darvish,
 Renaud and Coelho (2026), "Integrated Poultry Production-Distribution Optimization", CIRRELT-2026-10.
@@ -60,7 +61,7 @@ end
 
 ## Generalizing beyond poultry
 
-Nothing in [`MaturationSource`](@ref) or [`QuotaSink`](@ref) is poultry-specific - `capacity`,
+Nothing in `MaturationSource` or `QuotaSink` is poultry-specific - `capacity`,
 `maturation_rate`, `target_value` and the acceptable/extended deviation bands describe any batch
 whose value grows linearly while held, and `quota`/`underproduction_unit_penalty`/
 `overproduction_unit_penalty` describe any soft periodic delivery target. The same model applies
