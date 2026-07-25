@@ -18,8 +18,8 @@ using SupplyChainOptimization
     add_product!(supplier, product; unit_cost=0.0)
     add_supplier!(sc, supplier)
 
-    storage = Storage("Storage 1", Seattle; 
-                fixed_cost= 0, 
+    storage = Storage("Storage 1", Seattle;
+                fixed_cost= 0,
                 initial_opened=true)
     add_product!(storage, product; additional_stock_cover=0, initial_inventory=0, unit_holding_cost=0.01)
     add_storage!(sc, storage)
@@ -55,8 +55,8 @@ end
     add_product!(supplier, product; unit_cost=0.0)
     add_supplier!(sc, supplier)
 
-    storage = Storage("Storage 1", Seattle; 
-                fixed_cost= 0, 
+    storage = Storage("Storage 1", Seattle;
+                fixed_cost= 0,
                 initial_opened=true)
     add_product!(storage, product; additional_stock_cover=0, initial_inventory=0, unit_holding_cost=0.01)
     add_storage!(sc, storage)
