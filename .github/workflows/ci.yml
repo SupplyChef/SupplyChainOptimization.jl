@@ -39,7 +39,10 @@ jobs:
       # correctly fix it to the git source. Force it explicitly here too,
       # regardless of that asymmetry, until a registry release makes this
       # unnecessary (see the comment on [sources] in Project.toml).
-      - run: julia --project=. -e 'using Pkg; Pkg.add(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="main")'
+      # TEMPORARY: pinned to claude/cirrelt-2026-poultry-m1z7fv (not main) while
+      # MaturationSource/QuotaSink are only on that SupplyChainModeling branch - see the
+      # matching [sources] comment in Project.toml for why, and revert alongside it.
+      - run: julia --project=. -e 'using Pkg; Pkg.add(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="claude/cirrelt-2026-poultry-m1z7fv")'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1

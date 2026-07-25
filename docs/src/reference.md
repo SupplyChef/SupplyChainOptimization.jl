@@ -12,6 +12,17 @@ SupplyChainOptimization.create_network_profit_maximization_model!
 SupplyChainOptimization.optimize_network_optimization_model!
 SupplyChainOptimization.create_network_model
 haversine
+haversine_km
+```
+
+## Maturation Scheduling (IPPDP)
+
+```@docs
+create_maturation_scheduling_model
+optimize_maturation_schedule!
+get_maturation_schedule
+get_quota_shortfall
+get_quota_excess
 ```
 
 ## Querying Results
