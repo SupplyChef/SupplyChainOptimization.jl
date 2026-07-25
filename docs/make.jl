@@ -1,9 +1,15 @@
-import Pkg; 
+import Pkg;
 Pkg.add("CSV")
 Pkg.add("DataFrames")
 Pkg.add("JuMP")
 Pkg.add("HiGHS")
-Pkg.add("SupplyChainModeling")
+# TEMPORARY: docs/ is a separate Pkg environment from the package root, so the root
+# Project.toml's [sources] override (see the comment there) isn't inherited here - a plain
+# Pkg.add("SupplyChainModeling") resolves the registry's latest release (0.2.8), which predates
+# MaturationSource/QuotaSink, and the doctest/makedocs build below fails to precompile without
+# them. Pin explicitly here too, and revert alongside the other two spots (Project.toml
+# [sources], .github/workflows/ci.yml) once the companion SupplyChainModeling PR merges.
+Pkg.add(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="claude/cirrelt-2026-poultry-m1z7fv")
 
 using Documenter
 using SupplyChainOptimization
