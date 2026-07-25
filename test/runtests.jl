@@ -13,13 +13,12 @@ include("Inventory.jl")
 
 include("UFLlib.jl")
 include("Profits.jl")
-include("Disruptions.jl")
 include("GSM.jl")
 
 include("UnitTests.jl")
 
 @testset "Happy Path" begin
-                              
+
 @test !isnothing(create_model_storage_customer())
 
 @test begin
@@ -77,7 +76,7 @@ end
 @test begin
     sc, product, supplier = create_model_supplier_storage_customer()
     SupplyChainOptimization.minimize_cost!(sc)
-    get_total_costs(sc) == 1000 + 500 + 200 && 
+    get_total_costs(sc) == 1000 + 500 + 200 &&
     get_shipments(sc, supplier, product, 1) == 100
 end
 
@@ -85,14 +84,14 @@ end
     sc = create_model_plant_storage_customer()
     SupplyChainOptimization.minimize_cost!(sc)
     println("$(get_total_costs(sc)) == 3410")
-    get_total_costs(sc) == 3410 && 
+    get_total_costs(sc) == 3410 &&
     get_production(sc, first(sc.plants), first(sc.products), 1) == 100
 end
 
 @test begin
     sc, product2, plant = create_test_model4()
     SupplyChainOptimization.minimize_cost!(sc)
-    get_total_costs(sc) == 3400 && 
+    get_total_costs(sc) == 3400 &&
     get_production(sc, plant, product2, 1) == 100
 end
 

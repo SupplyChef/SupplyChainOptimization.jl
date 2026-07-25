@@ -256,6 +256,9 @@ function compute_safety_stock_gsm(supply_chain::SupplyChain, product::Product; s
         best_outgoing = 0
         for outgoing in 0:upper
             net_replenishment_time = incoming + lead_time[node] - outgoing
+            # Classic safety-stock formula SS = z * sigma * sqrt(net_replenishment_time),
+            # evaluated at each candidate outgoing service time and minimized over `outgoing`
+            # below - see get_net_replenishment_time for the equivalent post-hoc computation.
             own_cost = holding_cost[node] * z * sigma[node] * sqrt(net_replenishment_time)
             children_cost = 0.0
             for child in children[node]

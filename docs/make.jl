@@ -12,6 +12,7 @@ makedocs(
     sitename = "SupplyChainOptimization",
     format = Documenter.HTML(),
     modules = [SupplyChainOptimization],
+    checkdocs = :exports, # every exported symbol must have a docstring, and only exported symbols may be @docs'd - see docs/src/reference.md
     pages = ["index.md",
             "Examples" => ["optimization flows.md", "optimization locations.md", "multi-period optimization.md", "adding special constraints.md", "inventory movements.md"],
             "Internals" => ["optimization model.md"],

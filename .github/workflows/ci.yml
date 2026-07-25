@@ -1,8 +1,6 @@
 name: CI
 on:
   workflow_dispatch:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -18,8 +16,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10' # Replace this with the minimum Julia version that your package supports. E.g. if your package requires Julia 1.5 or higher, change this to '1.5'.
-          - '1' # Leave this line unchanged. '1' will automatically expand to the latest stable 1.x release of Julia.
+          - '1.10' # minimum Julia version supported (must match Project.toml's compat bound)
+          - '1' # latest stable 1.x release of Julia
         os:
           - ubuntu-latest
           - macos-latest
@@ -27,38 +25,25 @@ jobs:
         arch:
           - x64
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v4
-        env:
-          cache-name: cache-artifacts
-        with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
-      # TEMPORARY: the maximum_units/overflow_unit_cost support this depends on has
-      # already merged to SupplyChainModeling's main (as 0.2.9), but isn't published
-      # to a registry yet, so pull main directly rather than a moving feature branch.
-      # Remove this step once a registry release exists and bump the compat bound.
-      - run: julia --project=. -e 'using Pkg; Pkg.add(url="https://github.com/SupplyChef/SupplyChainModeling.jl", rev="main")'
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
   docs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
       - run: |
@@ -69,11 +54,9 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Documenter: doctest
-            using SupplyChainOptimization     
-            doctest(SupplyChainOptimization)' 
+            using SupplyChainOptimization
+            doctest(SupplyChainOptimization)'
       - run: julia --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v3

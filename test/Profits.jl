@@ -1,5 +1,5 @@
 @testset "Profits" begin
-    @test begin 
+    @test begin
         start = Dates.now()
         sc = parse_simple_data(raw"../data/BildeKrarup/B/B1.1")
         SupplyChainOptimization.maximize_profits!(sc)

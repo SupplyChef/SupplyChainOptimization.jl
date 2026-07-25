@@ -6,14 +6,10 @@ using Plots: Animation, buildanimation, mp4
 """
     plot_inventory(supply_chain, storage, product)
 
-Plots the amount of inventory of a product on-hand at a storage location at the beginning of each period. 
+Plots the amount of inventory of a product on-hand at a storage location at the beginning of each period.
 """
 function plot_inventory(supply_chain, storage, product)
     return Plot(scatter(;x=1:supply_chain.horizon, y=[get_inventory_at_end(supply_chain, storage, product, t) for t in 1:supply_chain.horizon], mode="lines+markers"))
-end
-
-function plot_networks(supply_chain; geography="usa", showlegend=true)
-    return hcat([plot_network(supply_chain, p; geography=geography, showlegend=showlegend) for p in 1:supply_chain.horizon])
 end
 
 """
@@ -23,12 +19,12 @@ Plots the nodes of the supply chain on a map.
 
 The geography must be one of: "world" | "usa" | "europe" | "asia" | "africa" | "north america" | "south america".
 """
-function plot_network(supply_chain, period=1; 
-                      geography="usa", 
-                      showlegend=true, 
-                      title="Supply chain network", 
-                      excluded_nodes=[], 
-                      groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), 
+function plot_network(supply_chain, period=1;
+                      geography="usa",
+                      showlegend=true,
+                      title="Supply chain network",
+                      excluded_nodes=[],
+                      groups=[(supply_chain.storages, "storage", "square", "blue", 1.0),
                               (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
     traces = AbstractTrace[]
 
@@ -47,7 +43,7 @@ function plot_network(supply_chain, period=1;
                                 hoverinfo="text",
                                 text="$(element.name) - $(sum(get_shipments(supply_chain, element, p, period) for p in supply_chain.products))",
                                 name=group[2],
-                                mode="makers",
+                                mode="markers",
                                 marker_symbol=group[3],
                                 marker_size=10,
                                 marker_color=group[4],
@@ -72,7 +68,7 @@ function plot_network(supply_chain, period=1;
                             hoverinfo="text",
                             text="$(supplier.name)",
                             name="suppliers",
-                            mode="makers",
+                            mode="markers",
                             marker_symbol="circle",
                             marker_size=10,
                             marker_color="yellow")
@@ -90,7 +86,7 @@ function plot_network(supply_chain, period=1;
                         hoverinfo="text",
                         text="$(customer.name) - $(sum(get_shipments(supply_chain, customer, p, period) for p in supply_chain.products))",
                         name="customers",
-                        mode="makers",
+                        mode="markers",
                         marker_symbol="circle",
                         marker_color="green",
                         marker_opacity=0.35)
@@ -99,7 +95,7 @@ function plot_network(supply_chain, period=1;
 
     geo = attr(scope=geography,
                 showland=true,)
-         
+
     layout = Layout(;title=title, showlegend=showlegend, geo=geo)
     return Plot(traces, layout)
 end
@@ -107,7 +103,7 @@ end
 """
     plot_costs(supply_chain)
 
-Plots the costs of operating the supply chain. 
+Plots the costs of operating the supply chain.
 """
 function plot_costs(supply_chain)
     trace1 = bar(;x=1:supply_chain.horizon,
@@ -120,14 +116,14 @@ function plot_costs(supply_chain)
                  y=[value(supply_chain.optimization_model[:total_opening_costs_per_period][t]) for t in 1:supply_chain.horizon],
                  name="Opening Costs")
     trace4 = bar(;x=1:supply_chain.horizon,
-                 y=[value(supply_chain.optimization_model[:total_costs_per_period][t])  - 
+                 y=[value(supply_chain.optimization_model[:total_costs_per_period][t])  -
                     (value(supply_chain.optimization_model[:total_fixed_costs_per_period][t]) +
-                     value(supply_chain.optimization_model[:total_transportation_costs_per_period][t]) + 
+                     value(supply_chain.optimization_model[:total_transportation_costs_per_period][t]) +
                      value(supply_chain.optimization_model[:total_opening_costs_per_period][t])
                      ) for t in 1:supply_chain.horizon],
                  name="Other Costs")
-    
-    layout = Layout(;barmode="stack", 
+
+    layout = Layout(;barmode="stack",
                     xaxis_title="Period", xaxis_tick0=1, xaxis_dtick=1, xaxis_rangemode="nonnegative",
                     yaxis_title="Cost (\$)")
     Plot([trace1, trace2, trace3, trace4], layout)
@@ -180,7 +176,7 @@ end
 """
     plot_flows(supply_chain, period=1; geography="usa", showlegend=true)
 
-Plots the flows of products in the supply chain. 
+Plots the flows of products in the supply chain.
 """
 function plot_flows(supply_chain, period=1; geography="usa", showlegend=true, excluded_origins=[], origin_colors = Dict{Node, String}())
 
@@ -202,7 +198,7 @@ function plot_flows(supply_chain, period=1; geography="usa", showlegend=true, ex
                     color = colors[color_index]
                     push!(origin_colors, l.origin => color)
                 end
-            
+
                 push!(traces,
                     scattergeo(;lat=[l.origin.location.latitude, d.location.latitude],
                                 lon=[l.origin.location.longitude, d.location.longitude],
@@ -218,31 +214,23 @@ function plot_flows(supply_chain, period=1; geography="usa", showlegend=true, ex
 
     geo = attr(scope=geography,
                 showland=true,)
-         
+
     layout = Layout(;title="Supply chain flows", showlegend=showlegend, geo=geo)
     Plot(traces, layout)
 end
 
-"""
-    animate_network
-
-Creates an animation of the network through time.
-"""
-function animate_network(supply_chain; 
-                         geography="usa", 
-                         showlegend=true, 
-                         excluded_nodes=[],
-                         groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
-    origin_colors = Dict{Node, String}()
-    ps = [plot_network(supply_chain, i; geography=geography, showlegend=showlegend, excluded_nodes=excluded_nodes, groups=groups) for i in 1:supply_chain.horizon]
-
+# Shared by animate_network/animate_flows below: given the per-period Plot
+# vector `ps` (one plot_network/plot_flows result per period), builds the
+# frame/slider/play-pause-button/layout scaffolding for a Plotly time
+# animation. The two callers differ only in how `ps` itself is built.
+function _animate(ps, supply_chain; geography, showlegend)
     #generate the initial frame
     trace = [scattergeo() for i in 1:length(getfield(ps[supply_chain.horizon], :data))]
 
     #store all frames in a vector
     frames = PlotlyFrame[
         frame(
-            data = getfield(ps[k], :data), 
+            data = getfield(ps[k], :data),
             layout = attr(title_text = "Period $k"), #update title
             name = "frame_$k", #update frame name
             traces = collect(1:length(getfield(ps[k], :data)))
@@ -332,8 +320,21 @@ function animate_network(supply_chain;
     )
 
     #save the plot and show it
-    plotdata = Plot(trace, layout, frames)
-    return plotdata
+    return Plot(trace, layout, frames)
+end
+
+"""
+    animate_network
+
+Creates an animation of the network through time.
+"""
+function animate_network(supply_chain;
+                         geography="usa",
+                         showlegend=true,
+                         excluded_nodes=[],
+                         groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
+    ps = [plot_network(supply_chain, i; geography=geography, showlegend=showlegend, excluded_nodes=excluded_nodes, groups=groups) for i in 1:supply_chain.horizon]
+    return _animate(ps, supply_chain; geography=geography, showlegend=showlegend)
 end
 
 """
@@ -344,105 +345,7 @@ Creates an animation of the product flows through time.
 function animate_flows(supply_chain; geography="usa", showlegend=true, excluded_origins=[])
     origin_colors = Dict{Node, String}()
     ps = [plot_flows(supply_chain, i; geography=geography, showlegend=showlegend, excluded_origins=excluded_origins, origin_colors=origin_colors) for i in 1:supply_chain.horizon]
-
-    #generate the initial frame
-    trace = [scattergeo() for i in 1:length(getfield(ps[supply_chain.horizon], :data))]
-
-    #store all frames in a vector
-    frames = PlotlyFrame[
-        frame(
-            data = getfield(ps[k], :data), 
-            layout = attr(title_text = "Period $k"), #update title
-            name = "frame_$k", #update frame name
-            traces = collect(1:length(getfield(ps[k], :data)))
-        ) for k = 1:supply_chain.horizon
-    ]
-
-    #define the slider for manually viewing the frames
-    sliders_attr = [
-        attr(
-            active = 0,
-            minorticklen = 0,
-            pad_t = 10,
-            steps = [
-                attr(
-                    method = "animate",
-                    label = "Period $k",
-                    args = [
-                        ["frame_$k"], #match the name of the frame again
-                        attr(
-                            mode = "immediate",
-                            transition = attr(duration = 0),
-                            frame = attr(duration = 5, redraw = true),
-                        ),
-                    ],
-                ) for k = 1:supply_chain.horizon
-            ],
-        ),
-    ]
-
-    #define the displaying time per played frame (in milliseconds)
-    dt_frame = 250
-
-    #define the play and pause buttons
-    buttons_attr = [
-        attr(
-            label = "Play",
-            method = "animate",
-            args = [
-                nothing,
-                attr(
-                    fromcurrent = true,
-                    transition = (duration = dt_frame,),
-                    frame = attr(duration = dt_frame, redraw = true),
-                ),
-            ],
-        ),
-        attr(
-            label = "Pause",
-            method = "animate",
-            args = [
-                [nothing],
-                attr(
-                    mode = "immediate",
-                    fromcurrent = true,
-                    transition = attr(duration = dt_frame),
-                    frame = attr(duration = dt_frame, redraw = true),
-                ),
-            ],
-        ),
-    ]
-
-    #layout for the plot
-    layout = Layout(
-        width = 1500,
-        height = 1000,
-        margin_b = 90,
-        # add buttons to play the animation
-        updatemenus = [
-            attr(
-                x = 0.5,
-                y = 0,
-                yanchor = "top",
-                xanchor = "center",
-                showactive = true,
-                direction = "left",
-                type = "buttons",
-                pad = attr(t = 90, r = 10),
-                buttons = buttons_attr,
-            ),
-        ],
-        #add the sliders
-        sliders = sliders_attr,
-
-        showlegend=showlegend,
-        geo = attr(scope=geography,
-                    showland=true,),
-    )
-
-    #save the plot and show it
-    plotdata = Plot(trace, layout, frames)
-    return plotdata
+    return _animate(ps, supply_chain; geography=geography, showlegend=showlegend)
 end
 
 """
@@ -450,25 +353,26 @@ end
 
 Makes a movie of the network evolution.
 """
-function movie_network(supply_chain, file_path; 
-                        geography="usa", 
-                        showlegend=true, 
+function movie_network(supply_chain, file_path;
+                        geography="usa",
+                        showlegend=true,
                         excluded_nodes=[],
-                        groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)]) 
-    ps = [plot_network(supply_chain, i; 
-                        geography=geography, 
-                        showlegend=showlegend, 
-                        excluded_nodes=excluded_nodes, 
+                        groups=[(supply_chain.storages, "storage", "square", "blue", 1.0), (supply_chain.plants, "plant", "triangle-up", "red", 1.0)])
+    ps = [plot_network(supply_chain, i;
+                        geography=geography,
+                        showlegend=showlegend,
+                        excluded_nodes=excluded_nodes,
                         groups=groups) for i in 1:supply_chain.horizon]
 
-    fnames = []
-    mkpath("tmp")
-    for (i, p) in enumerate(ps)
-        fname = lpad(i, 6, "0") * ".png"
-        push!(fnames, fname)
-        savefig(p, "tmp/"*fname, width=700, height=500, scale=1)
-    end
+    mktempdir() do dir
+        fnames = String[]
+        for (i, p) in enumerate(ps)
+            fname = lpad(i, 6, "0") * ".png"
+            push!(fnames, fname)
+            savefig(p, joinpath(dir, fname), width=700, height=500, scale=1)
+        end
 
-    anim = Plots.Animation("tmp", fnames)
-    Plots.mp4(anim, file_path; fps=1)
+        anim = Plots.Animation(dir, fnames)
+        Plots.mp4(anim, file_path; fps=1)
+    end
 end
