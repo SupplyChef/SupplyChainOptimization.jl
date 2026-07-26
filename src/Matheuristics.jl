@@ -175,6 +175,11 @@ function matheuristic_optimize!(model; iterations::Int=10, fix_fraction::Real=0.
         end
     end
 
+    # Restore every variable's bounds *before* the final solve below, not after: JuMP marks a
+    # model "modified since last optimize!" the moment a bound changes, which invalidates the
+    # cached solution - restoring bounds after the final optimize! would leave has_values/
+    # objective_value/value unusable (OptimizeNotCalled()) for the caller. Restoring first and
+    # solving last means this function's very last model-touching action is optimize! itself.
     for v in discrete_vars
         _restore_bounds!(v, original_bounds[v])
     end
@@ -182,15 +187,13 @@ function matheuristic_optimize!(model; iterations::Int=10, fix_fraction::Real=0.
         delete(model, local_branching_constraint)
     end
 
-    # Leave model solved at the best solution found, with every variable's own bounds back to
-    # what they were originally (the pinning above is not left in place).
-    for v in discrete_vars
-        _pin!(v, best_values[v])
+    # Original bounds are always a relaxation of whatever was pinned during the search, so
+    # best_values remains feasible here - warm-starting from it means this final solve can only
+    # match or improve on best_objective, never regress, even under a tight time limit.
+    for v in all_vars
+        set_start_value(v, best_values[v])
     end
     JuMP.optimize!(model)
-    for v in discrete_vars
-        _restore_bounds!(v, original_bounds[v])
-    end
 
     return model
 end
