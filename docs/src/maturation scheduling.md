@@ -61,8 +61,20 @@ end
 
 ## Generalizing beyond poultry
 
-Nothing in `MaturationSource` or `QuotaSink` is poultry-specific - `capacity`,
-`maturation_rate`, `target_value` and the acceptable/extended deviation bands describe any batch
-whose value grows linearly while held, and `quota`/`underproduction_unit_penalty`/
-`overproduction_unit_penalty` describe any soft periodic delivery target. The same model applies
-to livestock finishing, aging/curing processes, or contractual delivery commitments more broadly.
+Nothing in `MaturationSource` or `QuotaSink` is poultry-specific, and nothing about the batch's
+value even has to *grow*. `MaturationSource`'s `add_product!` has two forms: a convenience form
+(`capacity`, `maturation_rate`, `target_value`, acceptable/extended deviation bands) for the
+common case of value rising linearly toward a target - the shape this poultry example, aging
+cheese, or a distillery barrel all share - and a fully custom form taking arbitrary
+`value_function`/`feasible_duration`/`duration_penalty` functions of duration.
+
+That custom form is what lets `MaturationSource` also express classical perishable/shelf-life
+inventory (constant value, unsellable past a fixed age) rather than just harvest-scheduling-style
+curves - the two families of problems the operations-research literature usually treats
+separately turn out to be the same object with a different curve shape. See
+`MaturationSource`'s own docstring for the literature connection, and its `add_product!`
+docstring for a shelf-life example.
+
+`QuotaSink`'s `quota`/`underproduction_unit_penalty`/`overproduction_unit_penalty` describe any
+soft periodic delivery target - a supply-managed quota, a contractual minimum order commitment,
+or any other target a business would rather miss (at a cost) than treat as a hard constraint.

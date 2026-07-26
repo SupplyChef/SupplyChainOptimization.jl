@@ -4,7 +4,7 @@ the supply chain, mirroring `check_model`'s checks for plants/customers.
 """
 function check_maturation_model(supply_chain)
     for source in supply_chain.maturation_sources
-        for product in keys(source.initial_value)
+        for product in keys(source.value_function)
             if !(product in supply_chain.products)
                 throw(ArgumentError("MaturationSource $source has product $product that is not in the supply chain's products."))
             end
@@ -26,19 +26,6 @@ end
 # choice, so it is exempt from the turnaround gate.
 function _is_valid_start(source, product, u)
     return u > source.unavailable_periods || (u == 1 && get(source.initial_inventory, product, 0.0) > 0)
-end
-
-# The per-unit deviation penalty for a batch shipping in a given zone (see maturation_zone):
-# 0 for the ideal zone, underrun_unit_penalty/overrun_unit_penalty for the two sellable-but-
-# off-target zones.
-function _deviation_unit_penalty(source, product, zone)
-    if zone == 1
-        return source.underrun_unit_penalty[product]
-    elseif zone == 2
-        return source.overrun_unit_penalty[product]
-    else
-        return 0.0
-    end
 end
 
 """
@@ -88,12 +75,12 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
     # iterate the exact set of valid keys as a plain Vector of tuples, rather than relying on
     # JuMP.Containers.SparseAxisArray's own iteration protocol.
     y_index = [(b, p, u, t) for b in sources, p in products, u in U, t in V
-               if has_product(b, p) && t > u && _is_valid_start(b, p, u) && !isnothing(maturation_zone(b, p, t - u))]
+               if has_product(b, p) && t > u && _is_valid_start(b, p, u) && is_feasible_duration(b, p, t - u)]
     r_index = [(b, p, s, t) for b in sources, p in products, s in sinks, t in V if has_product(b, p)]
 
     # y[b,p,u,t]: a batch of p starts at source b on day u and ships on day t.
     @variable(m, y[b=sources, p=products, u=U, t=V;
-                   has_product(b, p) && t > u && _is_valid_start(b, p, u) && !isnothing(maturation_zone(b, p, t - u))], Bin)
+                   has_product(b, p) && t > u && _is_valid_start(b, p, u) && is_feasible_duration(b, p, t - u)], Bin)
 
     # r[b,p,s,t]: source b's batch of p ships to sink s on day t.
     @variable(m, r[b=sources, p=products, s=sinks, t=V; has_product(b, p)], Bin)
@@ -111,9 +98,9 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
             init=0.0))
 
     @expression(m, total_deviation_costs,
-        sum(b.capacity * _deviation_unit_penalty(b, p, maturation_zone(b, p, t - u)) * abs(b.target_value[p] - get_maturity_value(b, p, t - u)) * y[b, p, u, t]
+        sum(b.capacity * get_duration_penalty(b, p, t - u) * y[b, p, u, t]
             for b in sources, p in products, u in U, t in V
-            if has_product(b, p) && t > u && _is_valid_start(b, p, u) && !isnothing(maturation_zone(b, p, t - u));
+            if has_product(b, p) && t > u && _is_valid_start(b, p, u) && is_feasible_duration(b, p, t - u);
             init=0.0))
 
     @expression(m, total_quota_deviation_costs,
@@ -134,17 +121,17 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
     # (10) A source's shipment on day t equals the batch that was scheduled to exit on day t, if any.
     @constraint(m, [b=sources, p=products, t=V; has_product(b, p)],
         sum(r[b, p, s, t] for s in sinks; init=0.0) ==
-        sum(y[b, p, u, t] for u in U if _is_valid_start(b, p, u) && t > u && !isnothing(maturation_zone(b, p, t - u)); init=0.0))
+        sum(y[b, p, u, t] for u in U if _is_valid_start(b, p, u) && t > u && is_feasible_duration(b, p, t - u); init=0.0))
 
     # (11) Each source starts at most one batch across the whole horizon (across every product it can hold).
     @constraint(m, [b=sources],
         sum(y[b, p, u, t] for p in products, u in U, t in V
-            if has_product(b, p) && _is_valid_start(b, p, u) && t > u && !isnothing(maturation_zone(b, p, t - u));
+            if has_product(b, p) && _is_valid_start(b, p, u) && t > u && is_feasible_duration(b, p, t - u);
             init=0.0) <= 1)
 
     # (13) A source that already holds a batch of a product must ship it during the horizon.
     @constraint(m, [b=sources, p=products; has_product(b, p) && get(b.initial_inventory, p, 0.0) > 0],
-        sum(y[b, p, 1, t] for t in V if t > 1 && !isnothing(maturation_zone(b, p, t - 1)); init=0.0) == 1)
+        sum(y[b, p, 1, t] for t in V if t > 1 && is_feasible_duration(b, p, t - 1); init=0.0) == 1)
 
     return m
 end

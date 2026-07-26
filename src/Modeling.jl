@@ -52,53 +52,41 @@ function get_sent_time(lane, destination, receipt_time)
     return sent_time
 end
 
-# maturation_zone/feasible_exits below implement Figure 1 and equations (1)-(6) of Gbéya,
-# Darvish, Renaud and Coelho (2026), "Integrated Poultry Production-Distribution
-# Optimization", CIRRELT-2026-10, generalized from a single global target/deviation to
-# per-(MaturationSource, Product) values (see MaturationSource.add_product!).
+# is_feasible_duration/get_duration_penalty/feasible_exits below drive the maturation-scheduling
+# model purely off a MaturationSource's registered age-value curve (see
+# MaturationSource.add_product!) - no assumption of linearity or any particular curve shape, so
+# they work identically whether that curve was built via the linear/%-band convenience form or
+# a fully custom one (e.g. a classical shelf-life curve).
 
-# Returns the four value thresholds delimiting the three sellable zones (and the
-# unsellable region beyond them) around a MaturationSource's target_value for a product.
-function _maturation_zone_bounds(source, product)
-    W = source.target_value[product]
-    lower_extended = (1 - source.acceptable_deviation_under[product] - source.extended_deviation_under[product]) * W
-    lower_acceptable = (1 - source.acceptable_deviation_under[product]) * W
-    upper_acceptable = (1 + source.acceptable_deviation_over[product]) * W
-    upper_extended = (1 + source.acceptable_deviation_over[product] + source.extended_deviation_over[product]) * W
-    return (lower_extended, lower_acceptable, upper_acceptable, upper_extended)
+"""
+    is_feasible_duration(source, product, duration)
+
+Checks whether a batch of `product` at `source` may ship after being held `duration` periods,
+per the source's registered feasibility curve (see `MaturationSource.add_product!`).
+"""
+function is_feasible_duration(source, product, duration)
+    return source.feasible_duration[product](duration)
 end
 
 """
-    maturation_zone(source, product, duration)
+    get_duration_penalty(source, product, duration)
 
-Classifies a batch's value after being held `duration` periods into one of three zones: `0`
-(ideal/on-target), `1` (below target but still sellable, e.g. to an alternative market), `2`
-(above target but still sellable). Returns `nothing` if the value falls outside even the
-extended-sellable range, meaning a batch cannot ship at that duration.
+Gets the per-unit cost of shipping a batch of `product` at `source` after being held `duration`
+periods, per the source's registered penalty curve (zero within its ideal range).
 """
-function maturation_zone(source, product, duration)
-    value = get_maturity_value(source, product, duration)
-    lower_extended, lower_acceptable, upper_acceptable, upper_extended = _maturation_zone_bounds(source, product)
-    if lower_acceptable <= value <= upper_acceptable
-        return 0
-    elseif lower_extended <= value < lower_acceptable
-        return 1
-    elseif upper_acceptable < value <= upper_extended
-        return 2
-    else
-        return nothing
-    end
+function get_duration_penalty(source, product, duration)
+    return source.duration_penalty[product](duration)
 end
 
 """
     feasible_exits(source, product, U, V)
 
-For a `MaturationSource`/product, computes every feasible `(start_day, ship_day, zone)` triple
-given candidate start days `U` and candidate ship days `V`: `zone` is `0`, `1`, or `2` (see
-`maturation_zone`). Start days at or before `source.unavailable_periods` are excluded (the
-source cannot begin a new batch during its mandatory turnaround). If the source already holds
-a batch of `product` (`initial_inventory[product] > 0`), day `1` is always included as a start
-day regardless of `U` or `unavailable_periods`: `initial_value` already reflects that batch's
+For a `MaturationSource`/product, computes every feasible `(start_day, ship_day)` pair given
+candidate start days `U` and candidate ship days `V` (see [`is_feasible_duration`](@ref)). Start
+days at or before `source.unavailable_periods` are excluded (the source cannot begin a new batch
+during its mandatory turnaround). If the source already holds a batch of `product`
+(`initial_inventory[product] > 0`), day `1` is always included as a start day regardless of `U`
+or `unavailable_periods`: the batch's registered value at duration `0` already reflects its
 *current* value as of day 1 of the horizon, so day 1 is a bookkeeping reference for an
 in-progress batch rather than a new scheduling choice.
 """
@@ -106,12 +94,10 @@ function feasible_exits(source, product, U, V)
     fresh_starts = [u for u in U if u > source.unavailable_periods]
     u_candidates = get(source.initial_inventory, product, 0.0) > 0 ? union(fresh_starts, (1,)) : fresh_starts
 
-    triples = Tuple{Int, Int, Int}[]
+    pairs = Tuple{Int, Int}[]
     for u in u_candidates, t in V
         t <= u && continue
-        zone = maturation_zone(source, product, t - u)
-        isnothing(zone) && continue
-        push!(triples, (u, t, zone))
+        is_feasible_duration(source, product, t - u) && push!(pairs, (u, t))
     end
-    return triples
+    return pairs
 end
