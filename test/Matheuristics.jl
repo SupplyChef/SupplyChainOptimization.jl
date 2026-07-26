@@ -33,6 +33,20 @@ end
     objective_value(m) ≈ 14.0 && has_upper_bound(x5) == has_upper_before
 end
 
+# matheuristic_optimize! leaves the model warm-started (JuMP.set_start_value persists across
+# optimize! calls, not cleared automatically) - a caller should be able to hand the model to a
+# subsequent, independent solve (e.g. a longer or exact one) and have it pick up where the
+# search left off, not error or silently discard the incumbent.
+@test begin
+    m, _ = build_knapsack()
+    JuMP.optimize!(m)
+    SupplyChainOptimization.matheuristic_optimize!(m; iterations=3)
+    first_objective = objective_value(m)
+
+    JuMP.optimize!(m)
+    objective_value(m) ≈ first_objective ≈ 14.0
+end
+
 @test begin
     m, x5 = build_knapsack()
     JuMP.optimize!(m)

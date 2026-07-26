@@ -16,6 +16,7 @@ include("Profits.jl")
 include("GSM.jl")
 include("MaturationScheduling.jl")
 include("Matheuristics.jl")
+include("MatheuristicBenchmark.jl")
 
 include("UnitTests.jl")
 

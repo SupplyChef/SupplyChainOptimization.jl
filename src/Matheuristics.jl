@@ -98,14 +98,37 @@ support that attribute name) - since each iteration only needs *a* feasible, hop
 solution, not a proof of optimality, bounding how long any single iteration can run keeps the
 overall search moving instead of stalling on one hard sub-problem.
 
+Every iteration's sub-solve, including the final one, is warm-started from the best solution
+found so far via `JuMP.set_start_value` - `model`'s current incumbent is always feasible for
+whatever neighborhood the next iteration explores, so this costs nothing and generally speeds up
+each re-solve.
+
 `model` is left, on return, re-solved at the best solution found (with every variable's bounds
 restored to what they were before this function was called - the pinning done internally is not
-left in place).
+left in place), and still warm-started at that solution. That means a caller can use this
+function to warm-start a subsequent, longer or exact solve: call `matheuristic_optimize!` with a
+modest iteration/time budget first, then call `JuMP.optimize!(model)` again directly (optionally
+after raising `"time_limit"` or removing it) - the solver picks up the existing start values
+(a JuMP model attribute that persists across `optimize!` calls, not cleared automatically) as its
+initial incumbent, typically pruning the search tree faster than starting cold.
 """
 function matheuristic_optimize!(model; iterations::Int=10, fix_fraction::Real=0.8, neighborhood::Symbol=:fix,
                                 local_branching_k::Int=20, time_limit_per_iteration::Union{Nothing, Real}=nothing)
     neighborhood in (:fix, :local_branching) || throw(ArgumentError("matheuristic_optimize!: neighborhood must be :fix or :local_branching, got $(repr(neighborhood))"))
     0.0 <= fix_fraction <= 1.0 || throw(ArgumentError("matheuristic_optimize!: fix_fraction must be between 0 and 1, got $fix_fraction"))
+
+    # Applied before the very first solve below, not just subsequent iterations' - otherwise an
+    # unsolved model handed in with no prior time limit of its own would run that first solve to
+    # completion with no bound at all, defeating the purpose of a time-boxed search on a hard
+    # instance.
+    if !isnothing(time_limit_per_iteration)
+        try
+            set_attribute(model, "time_limit", Float64(time_limit_per_iteration))
+        catch
+            # Best-effort: not every solver exposes a "time_limit" string attribute. Falling
+            # back to running each solve to completion is safe, just potentially slower.
+        end
+    end
 
     if !has_values(model)
         JuMP.optimize!(model)
@@ -128,15 +151,6 @@ function matheuristic_optimize!(model; iterations::Int=10, fix_fraction::Real=0.
 
     best_objective = objective_value(model)
     best_values = Dict(v => value(v) for v in all_vars)
-
-    if !isnothing(time_limit_per_iteration)
-        try
-            set_attribute(model, "time_limit", Float64(time_limit_per_iteration))
-        catch
-            # Best-effort: not every solver exposes a "time_limit" string attribute. Falling
-            # back to running each iteration to completion is safe, just potentially slower.
-        end
-    end
 
     local_branching_constraint = nothing
     use_local_branching = neighborhood == :local_branching && !isempty(binary_vars)
@@ -162,6 +176,13 @@ function matheuristic_optimize!(model; iterations::Int=10, fix_fraction::Real=0.
             end
         end
 
+        # Warm-start every iteration's sub-solve from the current incumbent, not just the final
+        # solve below - best_values is always feasible for this iteration's (relaxed or
+        # partially-fixed) neighborhood, so the solver starts from a known-good point instead of
+        # rediscovering one, on every iteration, not only the last.
+        for v in all_vars
+            set_start_value(v, best_values[v])
+        end
         JuMP.optimize!(model)
 
         if has_values(model)
