@@ -25,6 +25,12 @@ get_quota_shortfall
 get_quota_excess
 ```
 
+## Matheuristics
+
+```@docs
+matheuristic_optimize!
+```
+
 ## Querying Results
 
 ```@docs

@@ -8,6 +8,7 @@ include("Visualization.jl")
 include("Optimization.jl")
 include("GSM.jl")
 include("MaturationScheduling.jl")
+include("Matheuristics.jl")
 
 using Base: Bool, product
 using JuMP
@@ -50,7 +51,8 @@ export minimize_cost!,
       optimize_maturation_schedule!,
       get_maturation_schedule,
       get_quota_shortfall,
-      get_quota_excess
+      get_quota_excess,
+      matheuristic_optimize!
 
 function check_model(supply_chain)
     for production in supply_chain.plants
