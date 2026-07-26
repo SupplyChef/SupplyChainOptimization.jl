@@ -213,4 +213,35 @@ end
         2 <= schedule.ship_day - schedule.start_day <= 5
 end
 
+# integer_quota_deviation=true (the default) requires quota/capacity to be integer-valued: an
+# integer q_plus/q_minus can never exactly reconcile a fractional target, so a fractional
+# capacity/quota makes the model infeasible regardless of what ships. integer_quota_deviation=
+# false lifts that restriction.
+@test begin
+    sc = SupplyChain(20)
+    product = Product("batch")
+    add_product!(sc, product)
+
+    source = MaturationSource("s1", Location(0.0, 0.0); capacity=100.5)
+    add_product!(source, product; initial_value=0.0, maturation_rate=10.0, target_value=100.0,
+                                  acceptable_deviation_under=0.1, acceptable_deviation_over=0.1,
+                                  extended_deviation_under=0.1, extended_deviation_over=0.1)
+    add_maturation_source!(sc, source)
+
+    sink = QuotaSink("k1", Location(0.0, 0.0))
+    add_product!(sink, product; quota=100.5, underproduction_unit_penalty=1.0, overproduction_unit_penalty=1.0)
+    add_quota_sink!(sc, sink)
+
+    m_integer = create_maturation_scheduling_model(sc, HiGHS.Optimizer; transport_cost_per_distance=1.0,
+                                                    distance=(a, b) -> 1.0, is_delivery_day=t -> t == 10)
+    JuMP.optimize!(m_integer)
+
+    m_continuous = create_maturation_scheduling_model(sc, HiGHS.Optimizer; transport_cost_per_distance=1.0,
+                                                       distance=(a, b) -> 1.0, is_delivery_day=t -> t == 10,
+                                                       integer_quota_deviation=false)
+    JuMP.optimize!(m_continuous)
+
+    termination_status(m_integer) == INFEASIBLE && termination_status(m_continuous) == OPTIMAL
+end
+
 end

@@ -16,10 +16,16 @@ function _random_maturation_benchmark_instance(num_farms::Int, horizon::Int)
     # window) fixes the growth rate needed to land exactly on target_value at that duration -
     # guarantees every farm has a real, reachable ideal window within the horizon, rather than
     # risking an unsatisfiable random instance that would make the comparison meaningless.
+    # Capacities are integer-valued (birds are countable units, matching the paper's own
+    # instance generator) so the quota below - and every multiple of it constraint (8) sums -
+    # comes out integer too. create_maturation_scheduling_model's q_plus/q_minus are integer by
+    # default (see its integer_quota_deviation docstring): a fractional quota target could never
+    # be reconciled exactly by an integer deviation, making the model infeasible by construction
+    # regardless of what ships - the trap this instance is built to avoid, not work around.
     for f in 1:num_farms
         target_duration = 24.0 + rand() * 8.0
         growth_rate = (target_value - initial_value) / target_duration
-        capacity = 4000.0 + rand() * (32000.0 - 4000.0)
+        capacity = Float64(rand(4000:32000))
         farm = MaturationSource("farm$f", Location(45.0 + rand(), -73.0 + rand()); capacity=capacity)
         add_product!(farm, product; initial_value=initial_value, maturation_rate=growth_rate, target_value=target_value,
                                     acceptable_deviation_under=0.1, acceptable_deviation_over=0.1,
@@ -30,7 +36,7 @@ function _random_maturation_benchmark_instance(num_farms::Int, horizon::Int)
 
     total_capacity = sum(f.capacity for f in sc.maturation_sources)
     sink = QuotaSink("slaughterhouse1", Location(45.5, -73.5))
-    add_product!(sink, product; quota=total_capacity / horizon, underproduction_unit_penalty=1.0, overproduction_unit_penalty=1.0)
+    add_product!(sink, product; quota=round(total_capacity / horizon), underproduction_unit_penalty=1.0, overproduction_unit_penalty=1.0)
     add_quota_sink!(sc, sink)
 
     return sc

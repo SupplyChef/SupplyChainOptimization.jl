@@ -51,12 +51,20 @@ per unit of the source's shipped batch (`MaturationSource.capacity`).
 batches may start or ship on respectively - e.g. to exclude weekends/holidays. Both default to
 allowing every day.
 
+`integer_quota_deviation` (default `true`, matching the paper's `q_st^+, q_st^- ∈ Z_+`) makes
+the quota over/underproduction variables integer - correct when `capacity`/`quota` count
+discrete units (e.g. birds), but a trap for continuous-valued capacities (mass, currency-like
+units): an integer deviation can never exactly reconcile a fractional quota shortfall/excess,
+making the model infeasible by construction regardless of what ships. Pass `false` when
+`capacity`/`quota` aren't inherently integer.
+
 Call `JuMP.optimize!` on the returned model (or use [`optimize_maturation_schedule!`](@ref)),
 then query results with [`get_maturation_schedule`](@ref), [`get_quota_shortfall`](@ref) and
 [`get_quota_excess`](@ref).
 """
 function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimizer; transport_cost_per_distance::Real,
-                                            distance=haversine, is_start_day=t -> true, is_delivery_day=t -> true)
+                                            distance=haversine, is_start_day=t -> true, is_delivery_day=t -> true,
+                                            integer_quota_deviation::Bool=true)
     check_maturation_model(supply_chain)
 
     sources = supply_chain.maturation_sources
@@ -85,9 +93,16 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
     # r[b,p,s,t]: source b's batch of p ships to sink s on day t.
     @variable(m, r[b=sources, p=products, s=sinks, t=V; has_product(b, p)], Bin)
 
-    # q_plus/q_minus: sink s's over/under-quota deviation for p on day t.
-    @variable(m, q_plus[s=sinks, p=products, t=V; has_product(s, p)] >= 0, Int)
-    @variable(m, q_minus[s=sinks, p=products, t=V; has_product(s, p)] >= 0, Int)
+    # q_plus/q_minus: sink s's over/under-quota deviation for p on day t. Int by default
+    # (matching the paper's Z_+ domain); see integer_quota_deviation's docstring for why that's
+    # unsafe for continuous-valued capacities/quotas.
+    if integer_quota_deviation
+        @variable(m, q_plus[s=sinks, p=products, t=V; has_product(s, p)] >= 0, Int)
+        @variable(m, q_minus[s=sinks, p=products, t=V; has_product(s, p)] >= 0, Int)
+    else
+        @variable(m, q_plus[s=sinks, p=products, t=V; has_product(s, p)] >= 0)
+        @variable(m, q_minus[s=sinks, p=products, t=V; has_product(s, p)] >= 0)
+    end
 
     m[:y_index] = y_index
     m[:r_index] = r_index
@@ -139,7 +154,7 @@ end
 """
     optimize_maturation_schedule!(supply_chain, optimizer=HiGHS.Optimizer; transport_cost_per_distance,
                                   distance=haversine, is_start_day=t -> true, is_delivery_day=t -> true,
-                                  log=false, time_limit=3600.0)
+                                  integer_quota_deviation=true, log=false, time_limit=3600.0)
 
 Builds (see [`create_maturation_scheduling_model`](@ref)) and solves the maturation-scheduling
 model for `supply_chain`, storing the result on `supply_chain.optimization_model` for
@@ -147,9 +162,11 @@ model for `supply_chain`, storing the result on `supply_chain.optimization_model
 """
 function optimize_maturation_schedule!(supply_chain, optimizer=HiGHS.Optimizer; transport_cost_per_distance::Real,
                                        distance=haversine, is_start_day=t -> true, is_delivery_day=t -> true,
+                                       integer_quota_deviation::Bool=true,
                                        log::Bool=false, time_limit::Real=3600.0)
     m = create_maturation_scheduling_model(supply_chain, optimizer; transport_cost_per_distance=transport_cost_per_distance,
-                                           distance=distance, is_start_day=is_start_day, is_delivery_day=is_delivery_day)
+                                           distance=distance, is_start_day=is_start_day, is_delivery_day=is_delivery_day,
+                                           integer_quota_deviation=integer_quota_deviation)
     set_attribute(m, "time_limit", time_limit)
     set_attribute(m, "log_to_console", log)
     supply_chain.optimization_model = m
