@@ -213,16 +213,19 @@ end
         2 <= schedule.ship_day - schedule.start_day <= 5
 end
 
-# integer_quota_deviation=true (the default) requires quota/capacity to be integer-valued: an
-# integer q_plus/q_minus can never exactly reconcile a fractional target, so a fractional
-# capacity/quota makes the model infeasible regardless of what ships. integer_quota_deviation=
-# false lifts that restriction.
+# integer_quota_deviation=true (the default) requires quota/capacity to be integer-valued - but
+# not merely "fractional" in isolation: with a single source, the only two possible shipped
+# quantities are 0 (don't ship) or capacity (ship). If quota happens to share capacity's
+# fractional part (e.g. both 100.5), shipping alone reconciles the equation exactly with q=0,
+# no integrality conflict at all. The real trap is a *mismatch*: capacity integer (100) but
+# quota fractional (100.5) means neither branch's gap (100.5 or 0.5) is an integer, so no
+# integer q_plus/q_minus can bridge either one - genuinely infeasible, not just fractional.
 @test begin
     sc = SupplyChain(20)
     product = Product("batch")
     add_product!(sc, product)
 
-    source = MaturationSource("s1", Location(0.0, 0.0); capacity=100.5)
+    source = MaturationSource("s1", Location(0.0, 0.0); capacity=100.0)
     add_product!(source, product; initial_value=0.0, maturation_rate=10.0, target_value=100.0,
                                   acceptable_deviation_under=0.1, acceptable_deviation_over=0.1,
                                   extended_deviation_under=0.1, extended_deviation_over=0.1)
