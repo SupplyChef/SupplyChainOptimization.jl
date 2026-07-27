@@ -68,13 +68,60 @@ common case of value rising linearly toward a target - the shape this poultry ex
 cheese, or a distillery barrel all share - and a fully custom form taking arbitrary
 `value_function`/`feasible_duration`/`duration_penalty` functions of duration.
 
+Mapping your own problem onto these constructs is a matter of naming, not modeling:
+
+| Generic construct | Poultry (this example) | Cheese aging | Fresh produce (shelf-life) |
+|---|---|---|---|
+| `MaturationSource` | a farm | an aging cave | a packing facility/lot |
+| `capacity` | birds per flock | wheels per batch | units per harvest lot |
+| `value_function(duration)` | weight at age `duration` | moisture/flavor development | constant (see below) |
+| `feasible_duration` | within the target weight band | within the aging window | age ≤ shelf life |
+| `duration_penalty` | off-target-weight discount | early/late-release discount | none (either sellable or not) |
+| `changeover_periods` | biosecurity sanitation | barrel/cave cleaning | lot changeover |
+| `QuotaSink` | a slaughterhouse | a distributor | a retail chain |
+| `quota` | daily bird intake target | weekly case commitment | weekly order commitment |
+
 That custom form is what lets `MaturationSource` also express classical perishable/shelf-life
 inventory (constant value, unsellable past a fixed age) rather than just harvest-scheduling-style
 curves - the two families of problems the operations-research literature usually treats
 separately turn out to be the same object with a different curve shape. See
-`MaturationSource`'s own docstring for the literature connection, and its `add_product!`
-docstring for a shelf-life example.
+`MaturationSource`'s own docstring for the literature connection.
 
 `QuotaSink`'s `quota`/`underproduction_unit_penalty`/`overproduction_unit_penalty` describe any
 soft periodic delivery target - a supply-managed quota, a contractual minimum order commitment,
 or any other target a business would rather miss (at a cost) than treat as a hard constraint.
+
+## A second example: classical shelf-life inventory, not harvest scheduling
+
+A produce packer holds lots that are simply sellable or not - full value for 5 days after
+packing, worthless after - and ships to a single retail chain with a weekly order commitment.
+This is the custom-curve form of `add_product!`, and it needs no weight/growth concepts at all:
+
+```julia
+using SupplyChainModeling
+using SupplyChainOptimization
+
+sc = SupplyChain(30)
+
+produce = Product("berries")
+add_product!(sc, produce)
+
+lot = MaturationSource("Packing Lot 1", Location(44.6, -63.6); capacity=2_000)
+add_product!(lot, produce,
+             duration -> 1.0,               # value_function: full value throughout shelf life
+             duration -> duration <= 5,      # feasible_duration: sellable for 5 days, then not
+             duration -> 0.0)                # duration_penalty: no partial-quality discount
+add_maturation_source!(sc, lot)
+
+retailer = QuotaSink("Retail Chain", Location(44.65, -63.57))
+add_product!(retailer, produce; quota=2_000, underproduction_unit_penalty=5.0, overproduction_unit_penalty=1.0)
+add_quota_sink!(sc, retailer)
+
+optimize_maturation_schedule!(sc; transport_cost_per_distance=2.0, distance=haversine_km)
+
+get_maturation_schedule(sc, lot, produce)
+```
+
+Underproduction is penalized more heavily than overproduction here (`5.0` vs `1.0`) since an
+empty shelf loses a sale outright while excess stock is merely a markdown - the same
+`QuotaSink` fields, just weighted for a different business reality than the poultry example's.
