@@ -52,6 +52,10 @@ export minimize_cost!,
       get_maturation_schedule,
       get_quota_shortfall,
       get_quota_excess,
+      get_total_deviation_costs,
+      get_total_overproduction_costs,
+      get_total_underproduction_costs,
+      get_total_quota_deviation_costs,
       matheuristic_optimize!
 
 function check_model(supply_chain)

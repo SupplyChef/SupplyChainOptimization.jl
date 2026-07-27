@@ -107,6 +107,9 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
     m[:y_index] = y_index
     m[:r_index] = r_index
 
+    # Named to match the paper's own four-way objective breakdown (Figure 2's OF_d, OF_w,
+    # OF_q+, OF_q-) - see get_total_deviation_costs/get_total_overproduction_costs/
+    # get_total_underproduction_costs below for the query-side counterparts.
     @expression(m, total_transportation_costs,
         sum(transport_cost_per_distance * distance(b.location, s.location) * b.capacity * r[b, p, s, t]
             for b in sources, p in products, s in sinks, t in V if has_product(b, p);
@@ -118,12 +121,21 @@ function create_maturation_scheduling_model(supply_chain, optimizer=HiGHS.Optimi
             if has_product(b, p) && t > u && _is_valid_start(b, p, u) && is_feasible_duration(b, p, t - u);
             init=0.0))
 
-    @expression(m, total_quota_deviation_costs,
-        sum(s.overproduction_unit_penalty[p] * q_plus[s, p, t] + s.underproduction_unit_penalty[p] * q_minus[s, p, t]
-            for s in sinks, p in products, t in V if has_product(s, p);
-            init=0.0))
+    @expression(m, total_overproduction_costs,
+        sum(s.overproduction_unit_penalty[p] * q_plus[s, p, t] for s in sinks, p in products, t in V if has_product(s, p); init=0.0))
 
-    @objective(m, Min, total_transportation_costs + total_deviation_costs + total_quota_deviation_costs)
+    @expression(m, total_underproduction_costs,
+        sum(s.underproduction_unit_penalty[p] * q_minus[s, p, t] for s in sinks, p in products, t in V if has_product(s, p); init=0.0))
+
+    @expression(m, total_quota_deviation_costs, total_overproduction_costs + total_underproduction_costs)
+
+    # total_costs (and reusing the transportation-cost expression's name) is deliberate: it lets
+    # the existing get_total_costs/get_total_transportation_costs from Querying.jl (written for
+    # create_network_model) work unchanged against a maturation-scheduling model's
+    # supply_chain.optimization_model too, rather than needing their own re-declared copies here.
+    @expression(m, total_costs, total_transportation_costs + total_deviation_costs + total_quota_deviation_costs)
+
+    @objective(m, Min, total_costs)
 
     # (8) Deliveries to each sink meet its quota up to a penalized deviation.
     @constraint(m, [s=sinks, p=products, t=V; has_product(s, p)],
@@ -216,4 +228,50 @@ Gets the number of units by which deliveries of `product` to `sink` exceeded its
 """
 function get_quota_excess(supply_chain, sink::QuotaSink, product, period)
     return value(supply_chain.optimization_model[:q_plus][sink, product, period])
+end
+
+"""
+    get_total_deviation_costs(supply_chain)
+
+Gets the total value-deviation penalty across every shipped batch, after solving (see
+[`create_maturation_scheduling_model`](@ref)) - the `OF_w` component of the paper's own
+objective breakdown (Figure 2). `get_total_transportation_costs` and `get_total_costs` (from
+`Querying.jl`, written for [`minimize_cost!`](@ref)/[`maximize_profits!`](@ref)'s network model)
+work unchanged against a maturation-scheduling model too.
+"""
+function get_total_deviation_costs(supply_chain)
+    return value(supply_chain.optimization_model[:total_deviation_costs])
+end
+
+"""
+    get_total_overproduction_costs(supply_chain)
+
+Gets the total overproduction (over-quota) penalty across every sink and period, after solving
+(see [`create_maturation_scheduling_model`](@ref)) - the `OF_q+` component of the paper's own
+objective breakdown (Figure 2).
+"""
+function get_total_overproduction_costs(supply_chain)
+    return value(supply_chain.optimization_model[:total_overproduction_costs])
+end
+
+"""
+    get_total_underproduction_costs(supply_chain)
+
+Gets the total underproduction (under-quota) penalty across every sink and period, after solving
+(see [`create_maturation_scheduling_model`](@ref)) - the `OF_q-` component of the paper's own
+objective breakdown (Figure 2).
+"""
+function get_total_underproduction_costs(supply_chain)
+    return value(supply_chain.optimization_model[:total_underproduction_costs])
+end
+
+"""
+    get_total_quota_deviation_costs(supply_chain)
+
+Gets the total quota-deviation penalty (over- and under-production combined) across every sink
+and period, after solving (see [`create_maturation_scheduling_model`](@ref)) - equivalent to
+`get_total_overproduction_costs(supply_chain) + get_total_underproduction_costs(supply_chain)`.
+"""
+function get_total_quota_deviation_costs(supply_chain)
+    return value(supply_chain.optimization_model[:total_quota_deviation_costs])
 end
