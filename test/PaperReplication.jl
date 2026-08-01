@@ -106,7 +106,18 @@ end
     num_farms, num_sinks, weeks = 60, 1, 6
     sc, is_start_day, is_delivery_day = _paper_instance(num_farms, num_sinks, weeks)
 
-    m = create_maturation_scheduling_model(sc, HiGHS.Optimizer; transport_cost_per_distance=1.0,
+    # transport_cost_per_distance=1.0 (matching the underrun/overrun quota penalties' scale of
+    # $1/bird) was tried first and made every instance degenerate: a bird's transport cost is
+    # distance * transport_cost_per_distance * capacity, and on this 270x270 grid distances run
+    # into the hundreds, so shipping anywhere cost far more per bird than just eating the $1/bird
+    # quota underproduction penalty - the solver's global optimum was to never ship a single
+    # batch (OF_d=OF_w=0, all cost dumped into OF_q-). Scaling by the grid's own diagonal
+    # (~382 units) keeps a bird's transport cost below $1 for any farm-sink pair in this instance,
+    # so shipping is never structurally dominated regardless of distance, and the replication
+    # exercises the model's actual start/ship timing and quota trade-offs instead of a trivial
+    # all-zero solution.
+    transport_cost_per_distance = 1.0 / 400.0
+    m = create_maturation_scheduling_model(sc, HiGHS.Optimizer; transport_cost_per_distance=transport_cost_per_distance,
                                            distance=_euclidean_km, is_start_day=is_start_day, is_delivery_day=is_delivery_day)
     set_silent(m)
     JuMP.optimize!(m)
@@ -127,9 +138,12 @@ end
     end
 
     # Structural checks, not a numeric match to the paper's own (unreproducible, different-seed)
-    # figures: the instance must be solvable, and the reported total must equal its own reported
-    # components, exactly like the paper's Figure 2.
-    solved && isapprox(get_total_costs(sc), get_total_transportation_costs(sc) + get_total_deviation_costs(sc) + get_total_quota_deviation_costs(sc); rtol=1e-6)
+    # figures: the instance must be solvable, the reported total must equal its own reported
+    # components (exactly like the paper's Figure 2), and at least one farm must actually ship -
+    # guarding against a regression back to the all-zero-shipment degeneracy described above.
+    solved &&
+        isapprox(get_total_costs(sc), get_total_transportation_costs(sc) + get_total_deviation_costs(sc) + get_total_quota_deviation_costs(sc); rtol=1e-6) &&
+        get_total_transportation_costs(sc) > 0
 end
 
 end

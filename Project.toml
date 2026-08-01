@@ -26,14 +26,5 @@ StatsBase = "0.34"
 SupplyChainModeling = "0.2, 0.3, 0.4"
 julia = "1.10"
 
-# TEMPORARY: this branch's MaturationScheduling.jl depends on MaturationSource/QuotaSink,
-# which live on SupplyChainModeling's claude/cirrelt-2026-poultry-m1z7fv branch (version
-# 0.4.0), not yet merged to main or published to a registry. Pointing at that branch here so
-# CI on this PR can resolve and test against it. Once SupplyChainModeling's PR merges to main
-# (and ideally is registry-published), switch this back to `rev = "main"` (matching the
-# pre-existing pattern this section replaced) or drop [sources] entirely - and keep the compat
-# bound above in sync with whatever version is actually resolved, or [sources]-based
-# resolution fails outright (the resolved version must satisfy the compat bound; unlike a
-# plain `Pkg.add(rev=...)`, [sources] does not bypass compat checking).
 [sources]
-SupplyChainModeling = {url = "https://github.com/SupplyChef/SupplyChainModeling.jl", rev = "claude/cirrelt-2026-poultry-m1z7fv"}
+SupplyChainModeling = {url = "https://github.com/SupplyChef/SupplyChainModeling.jl", rev = "main"}
