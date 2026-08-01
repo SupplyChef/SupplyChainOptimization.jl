@@ -2,6 +2,14 @@
 
 SupplyChainOptimization.jl is a package for modeling and optimizing supply chains.
 
+!!! note "New: Maturation scheduling"
+    Model supply chains where a batch's *value* grows while it's held and must ship to meet a
+    periodic delivery quota — poultry weight, cheese aging, wine maturation, or classical
+    shelf-life inventory are all the same underlying problem. See
+    [Maturation Scheduling](@ref) and [Matheuristics](@ref), or the
+    [case study](https://github.com/SupplyChef/SupplyChainOptimization.jl/blob/main/CASE_STUDY.md)
+    replicating a published production-distribution model end to end.
+
 ## Installation
 
 SupplyChainOptimization can be installed using the Julia package manager.
