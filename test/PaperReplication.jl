@@ -120,6 +120,13 @@ end
     m = create_maturation_scheduling_model(sc, HiGHS.Optimizer; transport_cost_per_distance=transport_cost_per_distance,
                                            distance=_euclidean_km, is_start_day=is_start_day, is_delivery_day=is_delivery_day)
     set_silent(m)
+    # A hard time limit is not just courtesy here: once transport cost stopped being trivially
+    # dominated (see above), this instance became genuinely hard for HiGHS's B&B, and one CI run
+    # left unbounded churned for over two hours before HiGHS's own RINS/RENS sub-MIP heuristics
+    # segfaulted (a HiGHS-internal crash, not a bug in this package's model). Bounding the solve
+    # avoids both the multi-hour CI run and, empirically, the crash - HiGHS returns its best
+    # incumbent (has_values may still be true under TIME_LIMIT).
+    set_attribute(m, "time_limit", 60.0)
     JuMP.optimize!(m)
     sc.optimization_model = m
 
