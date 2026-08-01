@@ -7,6 +7,8 @@ include("Querying.jl")
 include("Visualization.jl")
 include("Optimization.jl")
 include("GSM.jl")
+include("MaturationScheduling.jl")
+include("Matheuristics.jl")
 
 using Base: Bool, product
 using JuMP
@@ -29,6 +31,7 @@ export minimize_cost!,
       is_opening,
       is_closing,
       haversine,
+      haversine_km,
       plot_flows,
       plot_costs,
       animate_flows,
@@ -43,7 +46,17 @@ export minimize_cost!,
       get_outgoing_service_time,
       get_net_replenishment_time,
       get_safety_stock,
-      get_total_safety_stock_cost
+      get_total_safety_stock_cost,
+      create_maturation_scheduling_model,
+      optimize_maturation_schedule!,
+      get_maturation_schedule,
+      get_quota_shortfall,
+      get_quota_excess,
+      get_total_deviation_costs,
+      get_total_overproduction_costs,
+      get_total_underproduction_costs,
+      get_total_quota_deviation_costs,
+      matheuristic_optimize!
 
 function check_model(supply_chain)
     for production in supply_chain.plants
@@ -146,6 +159,17 @@ function haversine(lat1, lon1, lat2, lon2)
     Δlon = lon2 - lon1
 
     return 2 * R * asin(sqrt(sind(Δlat / 2) ^ 2 + cosd(lat1) * cosd(lat2) * sind(Δlon / 2) ^ 2))
+end
+
+"""
+    haversine_km(location1::Location, location2::Location)
+
+Computes the great circle distance between two locations, in kilometers - a convenience over
+[`haversine`](@ref) (which returns meters) for callers pricing distance per kilometer, e.g.
+[`create_maturation_scheduling_model`](@ref)'s `transport_cost_per_distance`.
+"""
+function haversine_km(location1::Location, location2::Location)
+    return haversine(location1, location2) / 1000.0
 end
 
 end # module

@@ -14,6 +14,10 @@ include("Inventory.jl")
 include("UFLlib.jl")
 include("Profits.jl")
 include("GSM.jl")
+include("MaturationScheduling.jl")
+include("Matheuristics.jl")
+include("MatheuristicBenchmark.jl")
+include("PaperReplication.jl")
 
 include("UnitTests.jl")
 
