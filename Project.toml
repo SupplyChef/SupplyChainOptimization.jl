@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.4.0"
+version = "0.4.1"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -23,16 +23,18 @@ PlotlyJS = "0.18"
 Plots = "1.40"
 Statistics = "1.10"
 StatsBase = "0.34"
-SupplyChainModeling = "0.2, 0.3"
+SupplyChainModeling = "0.2, 0.3, 0.4"
 julia = "1.10"
 
 # TEMPORARY: the maximum_units/overflow_unit_cost support this depends on has
-# already merged to SupplyChainModeling's main (now at 0.3.1), but isn't
-# published to a registry yet, so point at main directly rather than a moving
-# feature branch. Remove this section once a registry release exists - and
-# keep the compat bound above in sync with whatever version main currently
-# declares in the meantime, or [sources]-based resolution fails outright
-# (main's declared version must satisfy this bound; unlike a plain
-# `Pkg.add(rev=...)`, [sources] does not bypass compat checking).
+# already merged to SupplyChainModeling's main (now at 0.4.0 - 0.4.0 only
+# added MaturationSource/QuotaSink, additive and unused here, so this is
+# just riding along), but isn't published to a registry yet, so point at
+# main directly rather than a moving feature branch. Remove this section
+# once a registry release exists - and keep the compat bound above in sync
+# with whatever version main currently declares in the meantime, or
+# [sources]-based resolution fails outright (main's declared version must
+# satisfy this bound; unlike a plain `Pkg.add(rev=...)`, [sources] does not
+# bypass compat checking).
 [sources]
 SupplyChainModeling = {url = "https://github.com/SupplyChef/SupplyChainModeling.jl", rev = "main"}
