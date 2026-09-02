@@ -1,16 +1,25 @@
 module SupplyChainOptimization
 
 using SupplyChainModeling
+using Base: Bool, product
+using JuMP
+using HiGHS
 
+# `using JuMP` above has to come before these includes, not after: Optimization.jl's
+# functions use JuMP macros (@variable, @constraint, @objective, ...) in their bodies,
+# and macro expansion happens at parse time (during `include`), unlike ordinary
+# function calls which resolve names lazily at call time. This used to work by
+# accident - Visualization.jl (included just before Optimization.jl) had its own
+# `using JuMP`, which made JuMP's macros available module-wide from that point on.
+# Once Visualization.jl stopped needing JuMP itself (PlotlyJS/Plots became weak
+# deps - see that file and ext/), that accidental ordering broke Optimization.jl's
+# precompilation. Don't reintroduce a `using JuMP` inside one of the included files
+# as a fix - it worked once by luck, not by design.
 include("Modeling.jl")
 include("Querying.jl")
 include("Visualization.jl")
 include("Optimization.jl")
 include("GSM.jl")
-
-using Base: Bool, product
-using JuMP
-using HiGHS
 
 export minimize_cost!,
       maximize_profits!,
