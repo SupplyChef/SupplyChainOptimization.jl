@@ -1,3 +1,5 @@
+using DataFrames
+
 """
     get_total_costs(supply_chain::SupplyChain)
 
@@ -192,4 +194,31 @@ function check(supply_chain)
         !((termination_status(supply_chain.optimization_model) == JuMP.OPTIMAL) || (primal_status(supply_chain.optimization_model) == JuMP.FEASIBLE_POINT) || has_values(supply_chain.optimization_model))
         throw(ErrorException("The optimize_network! function must be called first."))
     end
+end
+
+"""
+    get_financials(supply_chain; max_time=supply_chain.horizon)
+
+Gets the financial results of operating the supply chain.
+
+(Moved here from Visualization.jl: unlike everything else in that file, this
+doesn't touch PlotlyJS/Plots at all, so it stays available without the
+`ext/SupplyChainOptimizationPlotlyJSExt` package extension - see that file
+and Visualization.jl for why the split exists.)
+"""
+function get_financials(supply_chain; max_time=supply_chain.horizon)
+    profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]
+    cum_profits = cumsum(profits, dims=1)
+
+    DataFrame((Horizon = 1:max_time,
+               Profits = profits,
+               Cumulative_Profits = cum_profits,
+               Revenues = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time],
+               Costs = collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time],
+               Transportation_Costs = collect(value.(supply_chain.optimization_model[:total_transportation_costs_per_period]))[1:max_time],
+               Holding_Costs = collect(value.(supply_chain.optimization_model[:total_holding_costs_per_period]))[1:max_time],
+               Buying_Costs = collect(value.(supply_chain.optimization_model[:total_buying_costs_per_period]))[1:max_time],
+               Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
+               Opening_Costs = collect(value.(supply_chain.optimization_model[:total_opening_costs_per_period]))[1:max_time],
+               Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time]))
 end

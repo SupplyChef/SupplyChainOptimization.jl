@@ -4,6 +4,11 @@ using SupplyChainOptimization
 #using Cbc
 using JuMP
 using Test
+# Loading PlotlyJS here is what activates SupplyChainOptimizationPlotlyJSExt
+# (see Project.toml's [weakdeps]/[extensions] and src/Visualization.jl) -
+# without it, plot_costs/plot_flows/plot_financials/plot_network/
+# animate_network/animate_flows below would all be plain MethodErrors.
+using PlotlyJS
 
 include("Models.jl")
 
