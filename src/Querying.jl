@@ -125,6 +125,19 @@ function get_shipments(supply_chain::SupplyChain, customer::Customer, product::P
 end
 
 """
+    get_lost_sales(supply_chain::SupplyChain, customer::Customer, product::Product, period=1)
+
+Gets the amount of demand for a given product at a given customer that went
+unmet (lost) during a given period. Bounded by `add_demand!`'s
+`service_level` over the whole horizon - see `get_financials` for the
+associated `lost_sales_cost` in dollar terms.
+"""
+function get_lost_sales(supply_chain::SupplyChain, customer::Customer, product::Product, period=1)
+    check(supply_chain)
+    return value(supply_chain.optimization_model[:lost_sales][product, customer, period])
+end
+
+"""
     is_opened(supply_chain::SupplyChain, storage::Storage, period=1)
 
 Gets whether a given storage location is opened during a given period.
@@ -205,10 +218,19 @@ Gets the financial results of operating the supply chain.
 doesn't touch PlotlyJS/Plots at all, so it stays available without the
 `ext/SupplyChainOptimizationPlotlyJSExt` package extension - see that file
 and Visualization.jl for why the split exists.)
+
+`Lost_Sales`/`Lost_Sales_Cost` are informational only - `lost_sales_cost`
+(from `add_demand!`) isn't currently a term in the optimization model's
+objective (only `sales_price`, via forgone revenue, and the `service_level`
+cap actually constrain the solve - see Optimization.jl), so these two
+columns are *not* included in `Costs`/`Profits` above. Don't sum them in.
 """
 function get_financials(supply_chain; max_time=supply_chain.horizon)
     profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]
     cum_profits = cumsum(profits, dims=1)
+
+    lost_sales_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][p, c, t]) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
+    lost_sales_cost_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][p, c, t]) * get_lost_sales_cost(supply_chain, c, p) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
 
     DataFrame((Horizon = 1:max_time,
                Profits = profits,
@@ -220,5 +242,7 @@ function get_financials(supply_chain; max_time=supply_chain.horizon)
                Buying_Costs = collect(value.(supply_chain.optimization_model[:total_buying_costs_per_period]))[1:max_time],
                Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
                Opening_Costs = collect(value.(supply_chain.optimization_model[:total_opening_costs_per_period]))[1:max_time],
-               Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time]))
+               Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time],
+               Lost_Sales = [lost_sales_by_period(t) for t in 1:max_time],
+               Lost_Sales_Cost = [lost_sales_cost_by_period(t) for t in 1:max_time]))
 end

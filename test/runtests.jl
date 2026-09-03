@@ -141,3 +141,41 @@ end
         true
     end
 end
+
+@testset "Lost sales" begin
+    @test begin
+        # Same shape as create_model_storage_customer(), but demand (100)
+        # outstrips the storage's initial_inventory (60) - a shortfall
+        # get_lost_sales/get_financials should report exactly, forced by
+        # the model's own balance constraint (received + arrivals ==
+        # demand - lost_sales), not a solver choice: with zero
+        # transportation/handling cost and a positive sales_price, shipping
+        # every available unit is strictly profit-improving, so all 60
+        # available units ship and the remaining 40 are lost sales -
+        # allowed here via service_level=0.0 (otherwise this would be
+        # infeasible instead, per the (1-service_level) cap in
+        # Optimization.jl).
+        sc = SupplyChain(1)
+
+        product = Product("p1")
+        add_product!(sc, product)
+
+        c = Customer("c1", Seattle)
+        add_customer!(sc, c)
+        add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
+
+        storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; initial_inventory=60.0)
+
+        add_lane!(sc, Lane(storage, c; unit_cost=0.0))
+
+        SupplyChainOptimization.maximize_profits!(sc)
+
+        financials = get_financials(sc)
+
+        get_lost_sales(sc, c, product, 1) == 40.0 &&
+        financials.Lost_Sales[1] == 40.0 &&
+        financials.Lost_Sales_Cost[1] == 120.0
+    end
+end

@@ -12,6 +12,13 @@ function get_service_level(supply_chain, customer, product)
     return 1.0
 end
 
+function get_lost_sales_cost(supply_chain, customer, product)
+    if haskey(supply_chain.demand_for, (customer, product))
+        return first(supply_chain.demand_for[(customer, product)]).lost_sales_cost
+    end
+    return 0.0
+end
+
 function has_bom(production, output)
     if(haskey(production.bill_of_material, output))
         return true
