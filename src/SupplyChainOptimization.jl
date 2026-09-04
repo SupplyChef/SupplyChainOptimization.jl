@@ -24,6 +24,8 @@ include("GSM.jl")
 export minimize_cost!,
       maximize_profits!,
       get_financials,
+      get_lost_sales,
+      get_lost_sales_cost,
       get_total_profits,
       get_total_costs,
       get_total_fixed_costs,
