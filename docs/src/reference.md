@@ -18,6 +18,7 @@ haversine
 
 ```@docs
 get_financials
+get_lost_sales
 get_total_profits
 get_total_costs
 get_total_fixed_costs
