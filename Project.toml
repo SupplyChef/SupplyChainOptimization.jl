@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.5.0"
+version = "0.6.0"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -23,7 +23,12 @@ SupplyChainOptimizationPlotsExt = ["PlotlyJS", "Plots"]
 [compat]
 Dates = "1.10"
 DataFrames = "1.6"
-HiGHS = "1.7"
+# CallbackFunction/HighsCallbackDataOut (progress_callback in
+# minimize_cost!/maximize_profits!) need HiGHS.jl to actually support the
+# MOI callback mechanism - present by 1.21 (when heuristic-callback
+# submission, a related but separate feature, was added on top of it),
+# possibly earlier; 1.21 is the earliest version confirmed to have it.
+HiGHS = "1.21"
 JuMP = "1.16"
 PlotlyJS = "0.18"
 Plots = "1.40"

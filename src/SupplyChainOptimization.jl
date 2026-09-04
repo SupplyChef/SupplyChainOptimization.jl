@@ -24,6 +24,8 @@ include("GSM.jl")
 export minimize_cost!,
       maximize_profits!,
       get_financials,
+      get_lost_sales,
+      get_lost_sales_cost,
       get_total_profits,
       get_total_costs,
       get_total_fixed_costs,
@@ -77,11 +79,20 @@ end
     minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
 Optimizes the supply chain for cost. The service level should be set to one to force the optimizer to serve all customers.
+
+Cost includes each unmet unit of demand's `lost_sales_cost` (from `add_demand!`), in addition to the physical operating costs - see `get_financials`'s `Lost_Sales_Cost` column.
+
+`progress_callback`, if given, is called periodically during the solve with
+`(node_count, primal_bound, dual_bound, gap, running_time)` - see
+`_register_progress_callback!`. Only fires for the default HiGHS optimizer,
+and only for a MIP (a pure LP solves in one step - there's no "progress" to
+report).
 """
-function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, progress_callback=nothing)
     create_network_cost_minimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    _register_progress_callback!(supply_chain.optimization_model, progress_callback)
     optimize_network_optimization_model!(supply_chain)
 end
 
@@ -89,12 +100,54 @@ end
     maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
 Optimizes the supply chain for profits. The service level should be set to zero to let the optimizer decide which customers to serve.
+
+Profit is revenue (forgoing `sales_price` on unmet demand) minus cost, and cost includes each unmet unit's `lost_sales_cost` (from `add_demand!`) - so leaving demand unserved costs both the forgone sale and the penalty, not just the former.
+
+`progress_callback`, if given, is called periodically during the solve with
+`(node_count, primal_bound, dual_bound, gap, running_time)` - see
+`_register_progress_callback!`. Only fires for the default HiGHS optimizer,
+and only for a MIP (a pure LP solves in one step - there's no "progress" to
+report).
 """
-function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, progress_callback=nothing)
     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    _register_progress_callback!(supply_chain.optimization_model, progress_callback)
     optimize_network_optimization_model!(supply_chain)
+end
+
+"""
+    _register_progress_callback!(model, progress_callback)
+
+Wires `progress_callback` up to HiGHS's `kHighsCallbackMipLogging` callback
+(fires at HiGHS's own internal logging cadence during branch & bound, not
+every node - cheap enough to leave on) via `HiGHS.CallbackFunction`. Does
+nothing if `progress_callback` is `nothing`, or if `model`'s solver isn't
+HiGHS (the callback mechanism used here - `MOI.set(model,
+HiGHS.CallbackFunction(), ...)` - is HiGHS-specific, not part of JuMP's
+solver-independent callback API).
+
+The HiGHS-facing callback never asks HiGHS to interrupt the solve (always
+returns `Cint(0)`) and never lets an exception from `progress_callback`
+escape back into HiGHS's C code (logged instead) - either would be
+unsafe/undefined behavior at that boundary, not just a normal Julia error.
+"""
+function _register_progress_callback!(model, progress_callback)
+    progress_callback === nothing && return nothing
+    JuMP.solver_name(model) == "HiGHS" || return nothing
+
+    function _highs_progress_callback(::Cint, ::Ptr{Cchar}, data_out::HiGHS.HighsCallbackDataOut)::Cint
+        try
+            progress_callback(data_out.mip_node_count, data_out.mip_primal_bound, data_out.mip_dual_bound, data_out.mip_gap, data_out.running_time)
+        catch e
+            @error "progress_callback threw - ignoring, the solve continues" exception = (e, catch_backtrace())
+        end
+        return Cint(0)
+    end
+
+    JuMP.set_optimizer_attribute(model, HiGHS.CallbackFunction([HiGHS.kHighsCallbackMipLogging]), _highs_progress_callback)
+    return nothing
 end
 
 """

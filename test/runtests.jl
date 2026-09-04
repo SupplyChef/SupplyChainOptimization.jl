@@ -141,3 +141,138 @@ end
         true
     end
 end
+
+@testset "Lost sales" begin
+    # Same shape as create_model_storage_customer(), but demand (100)
+    # outstrips the storage's initial_inventory (60) - a shortfall
+    # get_lost_sales/get_financials should report exactly, forced by
+    # the model's own balance constraint (received + arrivals ==
+    # demand - lost_sales), not a solver choice: with zero
+    # transportation/handling cost and a positive sales_price, shipping
+    # every available unit is strictly profit-improving, so all 60
+    # available units ship and the remaining 40 are lost sales -
+    # allowed here via service_level=0.0 (otherwise this would be
+    # infeasible instead, per the (1-service_level) cap in
+    # Optimization.jl).
+    sc = SupplyChain(1)
+
+    product = Product("p1")
+    add_product!(sc, product)
+
+    c = Customer("c1", Seattle)
+    add_customer!(sc, c)
+    add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
+
+    storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+    add_storage!(sc, storage)
+    add_product!(storage, product; initial_inventory=60.0)
+
+    add_lane!(sc, Lane(storage, c; unit_cost=0.0))
+
+    SupplyChainOptimization.maximize_profits!(sc)
+
+    financials = get_financials(sc)
+
+    # Individual @test calls (rather than one &&-chained boolean) so a
+    # failure prints which specific value was wrong, not just "false" -
+    # this whole testset never actually ran before get_lost_sales was
+    # exported (see the CI fix earlier in this PR's history), so these
+    # numbers were never confirmed against a real solve. Confirmed for
+    # real now: the shortfall IS exactly 40 units and Costs IS exactly
+    # the lost-sales penalty, as designed - but the LP solve returns
+    # values like 40.00000000000001, not clean integers, so this needs
+    # `≈` (isapprox), not `==`, to actually pass.
+    @test get_lost_sales(sc, c, product, 1) ≈ 40.0
+    @test financials.Lost_Sales[1] ≈ 40.0
+    @test financials.Lost_Sales_Cost[1] ≈ 120.0
+    # Every other cost in this scenario is zero (free storage, free lane,
+    # no holding cost) - so Costs is now exactly the lost sales penalty,
+    # confirming lost_sales_cost is folded into total_costs, not just
+    # reported alongside it.
+    @test financials.Costs[1] ≈ 120.0
+end
+
+@testset "Lost sales cost influences the objective" begin
+    # Shipping alone loses money here (sales_price=10 < lane unit_cost=12), so
+    # with lost_sales_cost=0 the optimizer strictly prefers losing the sale
+    # (costs nothing) over shipping (costs $2/unit net). Raising
+    # lost_sales_cost above that $2 margin loss flips the trade-off - not
+    # shipping now costs more than shipping's own loss - so the optimizer
+    # switches to serving the customer in full. This is a solver choice
+    # (unlike the "Lost sales" testset above, where the shortfall is forced
+    # by inventory), so it only demonstrates the fix if the choice actually
+    # changes with lost_sales_cost.
+    function build_margin_scenario(lost_sales_cost)
+        sc = SupplyChain(1)
+        product = Product("p1")
+        add_product!(sc, product)
+        c = Customer("c1", Seattle)
+        add_customer!(sc, c)
+        add_demand!(sc, c, product, [50.0]; sales_price=10.0, lost_sales_cost=lost_sales_cost, service_level=0.0)
+        storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; initial_inventory=100.0)
+        add_lane!(sc, Lane(storage, c; unit_cost=12.0))
+        return sc, c, product
+    end
+
+    sc_no_penalty, c_no_penalty, product_no_penalty = build_margin_scenario(0.0)
+    SupplyChainOptimization.maximize_profits!(sc_no_penalty)
+    @test get_lost_sales(sc_no_penalty, c_no_penalty, product_no_penalty, 1) ≈ 50.0
+
+    sc_penalty, c_penalty, product_penalty = build_margin_scenario(5.0)
+    SupplyChainOptimization.maximize_profits!(sc_penalty)
+    # atol, not just the default rtol: isapprox's relative tolerance is
+    # meaningless against an expected value of exactly 0 (rtol * 0 == 0,
+    # so isapprox(1e-13, 0.0) is false without an explicit atol) - the same
+    # LP floating-point noise as above (~1e-13), just with nothing to take
+    # a ratio against.
+    @test get_lost_sales(sc_penalty, c_penalty, product_penalty, 1) ≈ 0.0 atol=1e-6
+end
+
+@testset "Progress callback" begin
+    # HiGHS's MIP logging cadence is internal/timing-based - a fast solve
+    # isn't guaranteed to trigger even one callback, so this doesn't assert
+    # `calls` is nonempty, only that a callback being registered doesn't
+    # change/break a normal solve, and that any calls that did happen carry
+    # sane values (all(f, []) is vacuously true, so this passes either way).
+    #
+    # node_count/running_time are checked for non-negativity, but NOT
+    # primal_bound/dual_bound for finiteness, even though that was the
+    # original intent here - confirmed for real against CI that HiGHS
+    # legitimately reports these as +-Inf on early callbacks, before a
+    # first incumbent is found or a first dual bound is proven. That's
+    # correct HiGHS behavior being passed through unmodified by
+    # _register_progress_callback! (a pure passthrough of data_out's
+    # fields), not a bug in this package - the original assertion's
+    # assumption was simply wrong.
+    sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
+    calls = Any[]
+    SupplyChainOptimization.maximize_profits!(sc; progress_callback = (node_count, primal, dual, gap, running_time) ->
+        push!(calls, (node_count, primal, dual, gap, running_time)))
+    @test all(c -> c[1] >= 0, calls)
+    @test all(c -> c[5] >= 0, calls)
+
+    @test begin
+        # An exception inside progress_callback must never break the solve -
+        # HiGHS's C callback boundary can't safely propagate a Julia
+        # exception through it, so _register_progress_callback! catches and
+        # logs instead. Uses the same larger model as above to give this a
+        # real chance of actually firing the callback (and hitting the
+        # exception) during the solve, not just structurally asserting it.
+        sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
+        SupplyChainOptimization.maximize_profits!(sc; progress_callback = (args...) -> error("boom"))
+        termination_status(sc.optimization_model) in (JuMP.OPTIMAL, JuMP.TIME_LIMIT)
+    end
+
+    @test begin
+        # progress_callback is a no-op for a non-HiGHS optimizer path - this
+        # repo doesn't exercise one directly, but service_level=0 model with
+        # optimizer left at its HiGHS default plus an explicit no-solver
+        # check inside _register_progress_callback! covers the real risk
+        # here (JuMP.solver_name erroring or misidentifying HiGHS).
+        sc = create_model_storage_customer()
+        SupplyChainOptimization.minimize_cost!(sc; progress_callback = (args...) -> nothing)
+        termination_status(sc.optimization_model) == JuMP.OPTIMAL
+    end
+end
