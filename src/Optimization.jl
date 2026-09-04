@@ -38,6 +38,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, total_holding_costs_per_period[times] >= 0)
     @variable(m, total_overflow_costs >= 0)
     @variable(m, total_overflow_costs_per_period[times] >= 0)
+    @variable(m, total_lost_sales_costs >= 0)
+    @variable(m, total_lost_sales_costs_per_period[times] >= 0)
 
     if !relax
         @variable(m, opened[plants_storages, times], Bin)
@@ -153,6 +155,9 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [t=times], total_overflow_costs_per_period[t] == sum(overflow[p, s, t] * get_overflow_cost(s, p) for p in products, s in storages if !isinf(get_maximum_storage(s, p)); init=0.0))
     @constraint(m, total_overflow_costs == sum(total_overflow_costs_per_period[t] for t in times))
 
+    @constraint(m, [t=times], total_lost_sales_costs_per_period[t] == sum(lost_sales[p, c, t] * get_lost_sales_cost(supply_chain, c, p) for p in products, c in customers))
+    @constraint(m, total_lost_sales_costs == sum(supply_chain.discount_factor ^ (t-1) * total_lost_sales_costs_per_period[t] for t in times))
+
     @constraint(m, [t=times], total_buying_costs_per_period[t] == sum(bought[p, s, t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p); init=0.0))
     @constraint(m, [t=times], total_opening_costs_per_period[t] == sum(opening[s, t] * s.opening_cost for s in plants_storages if !isinf(s.opening_cost); init=0.0))
     @constraint(m, [t=times], total_closing_costs_per_period[t] == sum(closing[s, t] * s.closing_cost for s in plants_storages if !isinf(s.closing_cost); init=0.0))
@@ -166,7 +171,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        sum(produced[p, s, t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p)) +
                        sum(l.fixed_cost * used[l, t] for l in lanes if l.fixed_cost > 0) +
                        total_holding_costs_per_period[t] +
-                       total_overflow_costs_per_period[t])
+                       total_overflow_costs_per_period[t] +
+                       total_lost_sales_costs_per_period[t])
 
     @constraint(m, [t=times], total_revenues_per_period[t] == sum((get_sales_price(supply_chain, c, p, t) * (get_demand(supply_chain, c, p, t) - lost_sales[p, c, t])) for p in products for c in customers))
     @constraint(m, total_revenues == sum(supply_chain.discount_factor ^ (t-1) * total_revenues_per_period[t] for t in times))

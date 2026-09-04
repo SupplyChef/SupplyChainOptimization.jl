@@ -219,11 +219,12 @@ doesn't touch PlotlyJS/Plots at all, so it stays available without the
 `ext/SupplyChainOptimizationPlotlyJSExt` package extension - see that file
 and Visualization.jl for why the split exists.)
 
-`Lost_Sales`/`Lost_Sales_Cost` are informational only - `lost_sales_cost`
-(from `add_demand!`) isn't currently a term in the optimization model's
-objective (only `sales_price`, via forgone revenue, and the `service_level`
-cap actually constrain the solve - see Optimization.jl), so these two
-columns are *not* included in `Costs`/`Profits` above. Don't sum them in.
+`Lost_Sales_Cost` (each unmet unit's `lost_sales_cost` from `add_demand!`,
+summed) *is* included in `Costs`/`Profits` above - it's folded into
+`total_costs_per_period` in Optimization.jl alongside the physical operating
+costs, so don't sum it in again when working from these columns. `Lost_Sales`
+(the unmet quantity itself) has no cost dimension and is reported purely for
+visibility.
 """
 function get_financials(supply_chain; max_time=supply_chain.horizon)
     profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]

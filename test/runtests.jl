@@ -176,7 +176,49 @@ end
 
         get_lost_sales(sc, c, product, 1) == 40.0 &&
         financials.Lost_Sales[1] == 40.0 &&
-        financials.Lost_Sales_Cost[1] == 120.0
+        financials.Lost_Sales_Cost[1] == 120.0 &&
+        # Every other cost in this scenario is zero (free storage, free lane,
+        # no holding cost) - so Costs is now exactly the lost sales penalty,
+        # confirming lost_sales_cost is folded into total_costs, not just
+        # reported alongside it.
+        financials.Costs[1] == 120.0
+    end
+end
+
+@testset "Lost sales cost influences the objective" begin
+    # Shipping alone loses money here (sales_price=10 < lane unit_cost=12), so
+    # with lost_sales_cost=0 the optimizer strictly prefers losing the sale
+    # (costs nothing) over shipping (costs $2/unit net). Raising
+    # lost_sales_cost above that $2 margin loss flips the trade-off - not
+    # shipping now costs more than shipping's own loss - so the optimizer
+    # switches to serving the customer in full. This is a solver choice
+    # (unlike the "Lost sales" testset above, where the shortfall is forced
+    # by inventory), so it only demonstrates the fix if the choice actually
+    # changes with lost_sales_cost.
+    function build_margin_scenario(lost_sales_cost)
+        sc = SupplyChain(1)
+        product = Product("p1")
+        add_product!(sc, product)
+        c = Customer("c1", Seattle)
+        add_customer!(sc, c)
+        add_demand!(sc, c, product, [50.0]; sales_price=10.0, lost_sales_cost=lost_sales_cost, service_level=0.0)
+        storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; initial_inventory=100.0)
+        add_lane!(sc, Lane(storage, c; unit_cost=12.0))
+        return sc, c, product
+    end
+
+    @test begin
+        sc, c, product = build_margin_scenario(0.0)
+        SupplyChainOptimization.maximize_profits!(sc)
+        get_lost_sales(sc, c, product, 1) == 50.0
+    end
+
+    @test begin
+        sc, c, product = build_margin_scenario(5.0)
+        SupplyChainOptimization.maximize_profits!(sc)
+        get_lost_sales(sc, c, product, 1) == 0.0
     end
 end
 

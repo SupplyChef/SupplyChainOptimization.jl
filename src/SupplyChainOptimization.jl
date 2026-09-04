@@ -78,6 +78,8 @@ end
 
 Optimizes the supply chain for cost. The service level should be set to one to force the optimizer to serve all customers.
 
+Cost includes each unmet unit of demand's `lost_sales_cost` (from `add_demand!`), in addition to the physical operating costs - see `get_financials`'s `Lost_Sales_Cost` column.
+
 `progress_callback`, if given, is called periodically during the solve with
 `(node_count, primal_bound, dual_bound, gap, running_time)` - see
 `_register_progress_callback!`. Only fires for the default HiGHS optimizer,
@@ -96,6 +98,8 @@ end
     maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
 Optimizes the supply chain for profits. The service level should be set to zero to let the optimizer decide which customers to serve.
+
+Profit is revenue (forgoing `sales_price` on unmet demand) minus cost, and cost includes each unmet unit's `lost_sales_cost` (from `add_demand!`) - so leaving demand unserved costs both the forgone sale and the penalty, not just the former.
 
 `progress_callback`, if given, is called periodically during the solve with
 `(node_count, primal_bound, dual_bound, gap, running_time)` - see
