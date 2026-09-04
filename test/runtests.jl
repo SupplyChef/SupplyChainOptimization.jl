@@ -177,15 +177,19 @@ end
     # failure prints which specific value was wrong, not just "false" -
     # this whole testset never actually ran before get_lost_sales was
     # exported (see the CI fix earlier in this PR's history), so these
-    # numbers were never confirmed against a real solve.
-    @test get_lost_sales(sc, c, product, 1) == 40.0
-    @test financials.Lost_Sales[1] == 40.0
-    @test financials.Lost_Sales_Cost[1] == 120.0
+    # numbers were never confirmed against a real solve. Confirmed for
+    # real now: the shortfall IS exactly 40 units and Costs IS exactly
+    # the lost-sales penalty, as designed - but the LP solve returns
+    # values like 40.00000000000001, not clean integers, so this needs
+    # `≈` (isapprox), not `==`, to actually pass.
+    @test get_lost_sales(sc, c, product, 1) ≈ 40.0
+    @test financials.Lost_Sales[1] ≈ 40.0
+    @test financials.Lost_Sales_Cost[1] ≈ 120.0
     # Every other cost in this scenario is zero (free storage, free lane,
     # no holding cost) - so Costs is now exactly the lost sales penalty,
     # confirming lost_sales_cost is folded into total_costs, not just
     # reported alongside it.
-    @test financials.Costs[1] == 120.0
+    @test financials.Costs[1] ≈ 120.0
 end
 
 @testset "Lost sales cost influences the objective" begin
@@ -214,11 +218,16 @@ end
 
     sc_no_penalty, c_no_penalty, product_no_penalty = build_margin_scenario(0.0)
     SupplyChainOptimization.maximize_profits!(sc_no_penalty)
-    @test get_lost_sales(sc_no_penalty, c_no_penalty, product_no_penalty, 1) == 50.0
+    @test get_lost_sales(sc_no_penalty, c_no_penalty, product_no_penalty, 1) ≈ 50.0
 
     sc_penalty, c_penalty, product_penalty = build_margin_scenario(5.0)
     SupplyChainOptimization.maximize_profits!(sc_penalty)
-    @test get_lost_sales(sc_penalty, c_penalty, product_penalty, 1) == 0.0
+    # atol, not just the default rtol: isapprox's relative tolerance is
+    # meaningless against an expected value of exactly 0 (rtol * 0 == 0,
+    # so isapprox(1e-13, 0.0) is false without an explicit atol) - the same
+    # LP floating-point noise as above (~1e-13), just with nothing to take
+    # a ratio against.
+    @test get_lost_sales(sc_penalty, c_penalty, product_penalty, 1) ≈ 0.0 atol=1e-6
 end
 
 @testset "Progress callback" begin
