@@ -143,46 +143,49 @@ end
 end
 
 @testset "Lost sales" begin
-    @test begin
-        # Same shape as create_model_storage_customer(), but demand (100)
-        # outstrips the storage's initial_inventory (60) - a shortfall
-        # get_lost_sales/get_financials should report exactly, forced by
-        # the model's own balance constraint (received + arrivals ==
-        # demand - lost_sales), not a solver choice: with zero
-        # transportation/handling cost and a positive sales_price, shipping
-        # every available unit is strictly profit-improving, so all 60
-        # available units ship and the remaining 40 are lost sales -
-        # allowed here via service_level=0.0 (otherwise this would be
-        # infeasible instead, per the (1-service_level) cap in
-        # Optimization.jl).
-        sc = SupplyChain(1)
+    # Same shape as create_model_storage_customer(), but demand (100)
+    # outstrips the storage's initial_inventory (60) - a shortfall
+    # get_lost_sales/get_financials should report exactly, forced by
+    # the model's own balance constraint (received + arrivals ==
+    # demand - lost_sales), not a solver choice: with zero
+    # transportation/handling cost and a positive sales_price, shipping
+    # every available unit is strictly profit-improving, so all 60
+    # available units ship and the remaining 40 are lost sales -
+    # allowed here via service_level=0.0 (otherwise this would be
+    # infeasible instead, per the (1-service_level) cap in
+    # Optimization.jl).
+    sc = SupplyChain(1)
 
-        product = Product("p1")
-        add_product!(sc, product)
+    product = Product("p1")
+    add_product!(sc, product)
 
-        c = Customer("c1", Seattle)
-        add_customer!(sc, c)
-        add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
+    c = Customer("c1", Seattle)
+    add_customer!(sc, c)
+    add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
 
-        storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
-        add_storage!(sc, storage)
-        add_product!(storage, product; initial_inventory=60.0)
+    storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+    add_storage!(sc, storage)
+    add_product!(storage, product; initial_inventory=60.0)
 
-        add_lane!(sc, Lane(storage, c; unit_cost=0.0))
+    add_lane!(sc, Lane(storage, c; unit_cost=0.0))
 
-        SupplyChainOptimization.maximize_profits!(sc)
+    SupplyChainOptimization.maximize_profits!(sc)
 
-        financials = get_financials(sc)
+    financials = get_financials(sc)
 
-        get_lost_sales(sc, c, product, 1) == 40.0 &&
-        financials.Lost_Sales[1] == 40.0 &&
-        financials.Lost_Sales_Cost[1] == 120.0 &&
-        # Every other cost in this scenario is zero (free storage, free lane,
-        # no holding cost) - so Costs is now exactly the lost sales penalty,
-        # confirming lost_sales_cost is folded into total_costs, not just
-        # reported alongside it.
-        financials.Costs[1] == 120.0
-    end
+    # Individual @test calls (rather than one &&-chained boolean) so a
+    # failure prints which specific value was wrong, not just "false" -
+    # this whole testset never actually ran before get_lost_sales was
+    # exported (see the CI fix earlier in this PR's history), so these
+    # numbers were never confirmed against a real solve.
+    @test get_lost_sales(sc, c, product, 1) == 40.0
+    @test financials.Lost_Sales[1] == 40.0
+    @test financials.Lost_Sales_Cost[1] == 120.0
+    # Every other cost in this scenario is zero (free storage, free lane,
+    # no holding cost) - so Costs is now exactly the lost sales penalty,
+    # confirming lost_sales_cost is folded into total_costs, not just
+    # reported alongside it.
+    @test financials.Costs[1] == 120.0
 end
 
 @testset "Lost sales cost influences the objective" begin
@@ -209,17 +212,13 @@ end
         return sc, c, product
     end
 
-    @test begin
-        sc, c, product = build_margin_scenario(0.0)
-        SupplyChainOptimization.maximize_profits!(sc)
-        get_lost_sales(sc, c, product, 1) == 50.0
-    end
+    sc_no_penalty, c_no_penalty, product_no_penalty = build_margin_scenario(0.0)
+    SupplyChainOptimization.maximize_profits!(sc_no_penalty)
+    @test get_lost_sales(sc_no_penalty, c_no_penalty, product_no_penalty, 1) == 50.0
 
-    @test begin
-        sc, c, product = build_margin_scenario(5.0)
-        SupplyChainOptimization.maximize_profits!(sc)
-        get_lost_sales(sc, c, product, 1) == 0.0
-    end
+    sc_penalty, c_penalty, product_penalty = build_margin_scenario(5.0)
+    SupplyChainOptimization.maximize_profits!(sc_penalty)
+    @test get_lost_sales(sc_penalty, c_penalty, product_penalty, 1) == 0.0
 end
 
 @testset "Progress callback" begin
