@@ -88,6 +88,8 @@ defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05
 trades B&B time for more time spent in HiGHS's primal heuristics - useful on
 instances where the default effort doesn't find good incumbents quickly.
 
+Cost includes each unmet unit of demand's `lost_sales_cost` (from `add_demand!`), in addition to the physical operating costs - see `get_financials`'s `Lost_Sales_Cost` column.
+
 `progress_callback`, if given, is called periodically during the solve with
 `(node_count, primal_bound, dual_bound, gap, running_time)` - see
 `_register_progress_callback!`. Only fires for the default HiGHS optimizer,
@@ -117,6 +119,8 @@ same-named HiGHS options (see HiGHS's documentation) and are left at HiGHS's own
 defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05)
 trades B&B time for more time spent in HiGHS's primal heuristics - useful on
 instances where the default effort doesn't find good incumbents quickly.
+
+Profit is revenue (forgoing `sales_price` on unmet demand) minus cost, and cost includes each unmet unit's `lost_sales_cost` (from `add_demand!`) - so leaving demand unserved costs both the forgone sale and the penalty, not just the former.
 
 `progress_callback`, if given, is called periodically during the solve with
 `(node_count, primal_bound, dual_bound, gap, running_time)` - see
