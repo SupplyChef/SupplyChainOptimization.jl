@@ -231,19 +231,27 @@ end
 end
 
 @testset "Progress callback" begin
-    @test begin
-        # HiGHS's MIP logging cadence is internal/timing-based - a fast
-        # solve isn't guaranteed to trigger even one callback, so this
-        # doesn't assert `calls` is nonempty, only that a callback being
-        # registered doesn't change/break a normal solve, and that any
-        # calls that did happen carry sane values (all(f, []) is
-        # vacuously true, so this passes either way).
-        sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
-        calls = Any[]
-        SupplyChainOptimization.maximize_profits!(sc; progress_callback = (node_count, primal, dual, gap, running_time) ->
-            push!(calls, (node_count, primal, dual, gap, running_time)))
-        all(c -> c[1] >= 0 && isfinite(c[2]) && isfinite(c[3]) && c[5] >= 0, calls)
-    end
+    # HiGHS's MIP logging cadence is internal/timing-based - a fast solve
+    # isn't guaranteed to trigger even one callback, so this doesn't assert
+    # `calls` is nonempty, only that a callback being registered doesn't
+    # change/break a normal solve, and that any calls that did happen carry
+    # sane values (all(f, []) is vacuously true, so this passes either way).
+    #
+    # node_count/running_time are checked for non-negativity, but NOT
+    # primal_bound/dual_bound for finiteness, even though that was the
+    # original intent here - confirmed for real against CI that HiGHS
+    # legitimately reports these as +-Inf on early callbacks, before a
+    # first incumbent is found or a first dual bound is proven. That's
+    # correct HiGHS behavior being passed through unmodified by
+    # _register_progress_callback! (a pure passthrough of data_out's
+    # fields), not a bug in this package - the original assertion's
+    # assumption was simply wrong.
+    sc = create_model_plant_storage_customer(;horizon=40, customer_count=100)
+    calls = Any[]
+    SupplyChainOptimization.maximize_profits!(sc; progress_callback = (node_count, primal, dual, gap, running_time) ->
+        push!(calls, (node_count, primal, dual, gap, running_time)))
+    @test all(c -> c[1] >= 0, calls)
+    @test all(c -> c[5] >= 0, calls)
 
     @test begin
         # An exception inside progress_callback must never break the solve -
