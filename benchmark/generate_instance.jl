@@ -26,9 +26,23 @@ storage has finite `maximum_throughput` and every storage->customer lane has a
 `fixed_cost`, so both tightened bigM sites (see src/Optimization.jl) are active.
 """
 function generate_instance(; horizon=12, customer_count=150, storage_count=30, plant_count=3,
-                              storage_capacity=400.0, seed=42)
+                              storage_capacity=nothing, seed=42)
     rng = Random.MersenneTwister(seed)
     sc = SupplyChain(horizon)
+
+    # Size capacity off customer_count/plant_count/storage_count, not a flat
+    # constant - a fixed maximum_throughput doesn't scale with the instance,
+    # and plant capacity in particular can't be worked around by "open more
+    # plants" the way storage capacity can be worked around by opening more
+    # storages (plant_count is fixed). A 150-customer/3-plant instance with
+    # plant capacity hardcoded at storage_capacity*5=2000/plant (6000 total)
+    # against ~7500 average total demand was structurally infeasible - HiGHS
+    # correctly reported INFEASIBLE, not a bug in the solver. 30% headroom
+    # over worst-case per-customer demand (70, see below) keeps this feasible
+    # regardless of scale.
+    max_demand_per_customer = 70.0
+    storage_capacity = something(storage_capacity, max_demand_per_customer * customer_count * 1.3 / storage_count)
+    plant_capacity = max_demand_per_customer * customer_count * 1.3 / plant_count
 
     raw = add_product!(sc, Product("raw"))
     finished = add_product!(sc, Product("finished"))
@@ -41,7 +55,7 @@ function generate_instance(; horizon=12, customer_count=150, storage_count=30, p
         plant = add_plant!(sc, Plant("plant$i", Location(0, 0);
             fixed_cost=5_000.0, opening_cost=20_000.0, closing_cost=20_000.0, initial_opened=(i == 1)))
         add_product!(plant, finished; bill_of_material=Dict(raw => 1.0), unit_cost=2.0 + rand(rng),
-            maximum_throughput=storage_capacity * 5)
+            maximum_throughput=plant_capacity)
         add_lane!(sc, Lane(supplier, plant; unit_cost=0.5 + 0.2 * rand(rng)))
         push!(plants, plant)
     end
