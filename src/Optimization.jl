@@ -19,6 +19,23 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     end
     set_string_names_on_creation(m, false)
 
+    # A flow of product p anywhere in the network can never exceed the total
+    # demand for p summed over every customer and every period: whatever
+    # isn't eventually delivered is lost_sales, not extra flow. That's a
+    # valid (if loose - it ignores which period/lane a unit could actually
+    # reach) upper bound on any single sent/received/produced quantity, and
+    # for realistic demand magnitudes it's far tighter than a flat bigM.
+    # Products that are only ever consumed as BOM inputs (never demanded
+    # directly) have total_demand == 0, so effective_bigM below falls back
+    # to the caller's bigM for those - safe, just not tightened.
+    total_demand = Dict(p => sum(get_demand(supply_chain, c, p, t) for c in customers, t in times; init=0.0) for p in products)
+    total_demand_all_products = sum(values(total_demand); init=0.0)
+
+    # Never loosens the caller-supplied bigM - only tightens it when a
+    # finite, positive structural bound is available - so this can't cut
+    # off a feasible/optimal solution that the flat bigM would have allowed.
+    effective_bigM(bound) = (isfinite(bound) && bound > 0) ? min(bigM, bound) : bigM
+
     @variable(m, total_profits)
 
     @variable(m, total_revenues >= 0)
@@ -69,7 +86,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     if single_source
         @variable(m, serviced_by[products, storages, customers, times], Bin)
         @constraint(m, [p=products, c=customers, t=times], sum(serviced_by[p, s, c, t] for s in storages) <= 1)
-        @constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_between(supply_chain, s, c)) <= bigM * serviced_by[p, s, c, t])
+        @constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, c, t] for l in get_lanes_between(supply_chain, s, c)) <= effective_bigM(get_demand(supply_chain, c, p, t)) * serviced_by[p, s, c, t])
     end
 
     @constraint(m, [p=products, s=storages; haskey(s.initial_inventory, p)], stored_at_end[p, s, 0] == s.initial_inventory[p])
@@ -80,15 +97,15 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [p=products, l=lanes, t=times], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[p, l, t])
 
     @constraint(m, [l=lanes], sum(sent[p, l, t] for p in products, t in times if !can_ship(l, t)) == 0)
-    @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0 || l.fixed_cost > 0], sum(sent[p, l, t] for p in products) <= bigM * used[l, t])
+    @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0 || l.fixed_cost > 0], sum(sent[p, l, t] for p in products) <= effective_bigM(total_demand_all_products) * used[l, t])
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0], sum(sent[p, l, t] for p in products) >= l.minimum_quantity * used[l, t])
 
-    @constraint(m, [s=storages, t=times], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= bigM * opened[s, t])
+    @constraint(m, [s=storages, t=times], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= effective_bigM(min(total_demand_all_products, s.maximum_overall_throughput)) * opened[s, t])
     @constraint(m, [p=products, l=lanes, t=times; length(l.destinations) == 1 && isa(l.destinations[1], Customer) && get_sent_time(l, l.destinations[1], t) > 0],
                     received[p, l, l.destinations[1], t] <= get_demand(supply_chain, l.destinations[1], p, t) * opened[l.origin, get_sent_time(l, l.destinations[1], t)])
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in get_lanes_out(supply_chain, s)) <= get_maximum_throughput(s, p) * opened[s, t])
     @constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in get_lanes_out(supply_chain, s)) <= s.maximum_overall_throughput * opened[s, t])
-    @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in get_lanes_in(supply_chain, s)) <= bigM * opened[s, t])
+    @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in get_lanes_in(supply_chain, s)) <= effective_bigM(min(total_demand_all_products, s.maximum_overall_throughput)) * opened[s, t])
 
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p) * opened[s, t] + overflow[p, s, t])
 
@@ -126,7 +143,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
 
     for s in plants, p in products
         if haskey(s.time, p)
-            @constraint(m, [t=times, ti=t:min(t+s.time[p], supply_chain.horizon)], produced[p, s, t] <= bigM * opened[s, ti])
+            @constraint(m, [t=times, ti=t:min(t+s.time[p], supply_chain.horizon)], produced[p, s, t] <= effective_bigM(min(total_demand[p], get_maximum_throughput(s, p))) * opened[s, ti])
         else
             @constraint(m, sum(produced[p, s, :]) == 0)
             @constraint(m, sum(sum(sent[p, l, :]) for l in get_lanes_out(supply_chain, s)) == 0)

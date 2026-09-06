@@ -19,10 +19,13 @@ include("Modeling.jl")
 include("Querying.jl")
 include("Visualization.jl")
 include("Optimization.jl")
+include("Heuristics.jl")
 include("GSM.jl")
 
 export minimize_cost!,
       maximize_profits!,
+      warm_start_from_relaxation!,
+      solve_relax_and_fix!,
       get_financials,
       get_total_profits,
       get_total_costs,
@@ -77,11 +80,22 @@ end
     minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
 Optimizes the supply chain for cost. The service level should be set to one to force the optimizer to serve all customers.
+
+`mip_rel_gap`, `mip_heuristic_effort`, `presolve` and `parallel` map directly to the
+same-named HiGHS options (see HiGHS's documentation) and are left at HiGHS's own
+defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05)
+trades B&B time for more time spent in HiGHS's primal heuristics - useful on
+instances where the default effort doesn't find good incumbents quickly.
 """
-function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3)
     create_network_cost_minimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    isnothing(mip_rel_gap) || set_attribute(supply_chain.optimization_model, "mip_rel_gap", mip_rel_gap)
+    isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
+    isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
+    isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
+    apply_heuristic!(supply_chain, heuristic, :min_cost, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size)
     optimize_network_optimization_model!(supply_chain)
 end
 
@@ -89,19 +103,30 @@ end
     maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer)
 
 Optimizes the supply chain for profits. The service level should be set to zero to let the optimizer decide which customers to serve.
+
+`mip_rel_gap`, `mip_heuristic_effort`, `presolve` and `parallel` map directly to the
+same-named HiGHS options (see HiGHS's documentation) and are left at HiGHS's own
+defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05)
+trades B&B time for more time spent in HiGHS's primal heuristics - useful on
+instances where the default effort doesn't find good incumbents quickly.
 """
-function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
+function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3)
     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
+    isnothing(mip_rel_gap) || set_attribute(supply_chain.optimization_model, "mip_rel_gap", mip_rel_gap)
+    isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
+    isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
+    isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
+    apply_heuristic!(supply_chain, heuristic, :max_profit, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size)
     optimize_network_optimization_model!(supply_chain)
 end
 
 """
 Creates an optimization model for cost minimization.
 """
-function create_network_cost_minimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000)
-    supply_chain.optimization_model = create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
+function create_network_cost_minimization_model!(supply_chain, optimizer; single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, relax=false)
+    supply_chain.optimization_model = create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=relax)
 end
 
 """
@@ -122,8 +147,8 @@ end
 """
 Creates an optimization model for cost minimization.
 """
-function create_network_cost_minimization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false)
-    m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
+function create_network_cost_minimization_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false, relax=false)
+    m = create_network_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=relax)
     @objective(m, Min, 1.0 * m[:total_costs])
     return m
 end
