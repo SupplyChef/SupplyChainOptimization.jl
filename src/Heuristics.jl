@@ -120,9 +120,14 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
         JuMP.optimize!(m)
         JuMP.has_values(m) || break
 
+        # Read every value first, then write (fix) - interleaving JuMP.value
+        # reads with model-modifying calls in the same loop invalidates JuMP's
+        # cached solution mid-loop (JuMP warns and then OptimizeNotCalled()s
+        # on the very next value() call), so `fix` below reads from this
+        # already-fully-populated snapshot instead of calling JuMP.value again.
         snapshot = Dict(v => JuMP.value(v) for v in JuMP.all_variables(m))
         for s in plants_storages, t in window
-            JuMP.fix(m[:opened][s, t], round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)); force=true)
+            JuMP.fix(m[:opened][s, t], round(Int, clamp(snapshot[m[:opened][s, t]], 0, 1)); force=true)
         end
         window_start += window_size
     end
