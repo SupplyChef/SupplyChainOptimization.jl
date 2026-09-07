@@ -20,8 +20,16 @@
 # Extend INSTANCES/CONFIGS below to add more axes or heuristic settings once
 # real results suggest where to push further.
 #
-# 6 instances x 5 configs at up to ~120-260s each - this takes a while,
-# budget well over half an hour for a full run.
+# Every config is given the SAME TIME_LIMIT as a total wall-clock budget, for
+# an apples-to-apples comparison - warm_start/relax_and_fix used to silently
+# spend up to ~2x TIME_LIMIT (a full share for their own sub-solve(s) *plus*
+# an untouched full share for the final real solve), which made their results
+# look better than a fair comparison would show. Both now cap their own
+# sub-solve time and hand the real solve only what's left of TIME_LIMIT - see
+# warm_start_from_relaxation!/solve_relax_and_fix!'s docstrings.
+#
+# 6 instances x 5 configs at up to TIME_LIMIT each (plus model-build overhead) -
+# still takes a while, budget well over half an hour for a full run.
 
 using SupplyChainOptimization
 using SupplyChainModeling

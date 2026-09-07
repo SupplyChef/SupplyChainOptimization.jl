@@ -127,7 +127,7 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
 end
 
 """
-    warm_start_from_relaxation!(supply_chain, objective, optimizer=HiGHS.Optimizer; bigM, single_source, evergreen, use_direct_model)
+    warm_start_from_relaxation!(supply_chain, objective, optimizer=HiGHS.Optimizer; bigM, single_source, evergreen, use_direct_model, relaxation_time_fraction=0.3)
 
 Solves the model's LP-ish relaxation (see `_relaxed_solution_hints`) and, if it
 produces a usable solution, sets it as a **complete** discrete-variable start value
@@ -137,10 +137,32 @@ start values, it doesn't optimize the real model): `opened`, `used`, and (if
 derived from consecutive `opened` values (tightly forced by the real model's own
 constraints, so deriving them is exact, not a guess). Returns `true` if a warm
 start was applied, `false` otherwise.
+
+Stays within the caller's original `time_limit` as a *total* budget rather than
+handing the relaxed sub-solve a full share on top of it: the sub-solve is capped at
+`relaxation_time_fraction` (default 30%) of the original time limit, and
+`supply_chain.optimization_model`'s time limit is reduced by however long that
+sub-solve actually took before returning, so the caller's subsequent real solve
+gets only what's left - not a second full budget. Without this, a caller asking
+for `time_limit=120` could see this heuristic use up to ~240s of wall time (the
+relaxation's own 120s plus the real solve's untouched 120s), which silently breaks
+the `time_limit` contract every other code path here honors.
 """
-function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, tighten_bigM=true, log=false)
+function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, tighten_bigM=true, relaxation_time_fraction=0.3, log=false)
     m = supply_chain.optimization_model
-    hints = _relaxed_solution_hints(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, time_limit=JuMP.time_limit_sec(m), log=log)
+    total_time_limit = JuMP.time_limit_sec(m)
+    relaxation_budget = isnothing(total_time_limit) ? nothing : total_time_limit * relaxation_time_fraction
+
+    start = time()
+    hints = _relaxed_solution_hints(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, time_limit=relaxation_budget, log=log)
+    elapsed = time() - start
+
+    if !isnothing(total_time_limit)
+        remaining = max(1.0, total_time_limit - elapsed)
+        JuMP.set_time_limit_sec(m, remaining)
+        log && println("[warm_start] relaxation used $(round(elapsed; digits=1))s of the $(total_time_limit)s budget - $(round(remaining; digits=1))s left for the real solve")
+    end
+
     isnothing(hints) && return false
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
@@ -189,10 +211,11 @@ it within its own time budget.
 
 `time_limit_per_window` bounds each window's sub-solve; when `nothing` (the default)
 it's computed by splitting the model's current time limit evenly across the windows
-plus one extra share reserved for that final full-MIP polish solve, so total wall
-time stays roughly within the caller's original `time_limit` instead of multiplying
-it by the number of windows. The model's original time limit is restored before
-returning either way.
+plus one extra share reserved for that final full-MIP polish solve. Before returning,
+the model's time limit is set to whatever's left of the *original* budget after the
+window phase (not restored to the full original), so total wall time - window phase
+plus the caller's subsequent real solve - stays within the caller's original
+`time_limit` instead of using it twice.
 
 Returns `true` if at least one window solved to a usable solution, `false` otherwise
 (e.g. the very first window was infeasible) - the real model is left untouched in
@@ -222,6 +245,7 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
     # not whatever (possibly solution-less) state the final `optimize!` call
     # left behind.
     snapshot = nothing
+    total_elapsed = 0.0
     window_start = 1
     while window_start <= horizon
         window = window_start:min(window_start + window_size - 1, horizon)
@@ -232,6 +256,7 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
         wstart = time()
         JuMP.optimize!(m)
         welapsed = time() - wstart
+        total_elapsed += welapsed
         if !JuMP.has_values(m)
             log && println("[relax_and_fix] window $window: NO solution in $(round(welapsed; digits=1))s (status: $(JuMP.termination_status(m))) - stopping, falling back to whatever was fixed so far")
             break
@@ -261,7 +286,17 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
         end
     end
 
-    isnothing(original_time_limit) ? JuMP.unset_time_limit_sec(m) : JuMP.set_time_limit_sec(m, original_time_limit)
+    # Give the caller's subsequent real solve whatever's left of the original
+    # budget, not the full original again - restoring the full amount here is
+    # what silently let this heuristic use up to ~2x the caller's time_limit
+    # (the window phase's own time plus a second full share for the real solve).
+    if isnothing(original_time_limit)
+        JuMP.unset_time_limit_sec(m)
+    else
+        remaining = max(1.0, original_time_limit - total_elapsed)
+        JuMP.set_time_limit_sec(m, remaining)
+        log && println("[relax_and_fix] windows used $(round(total_elapsed; digits=1))s of the $(original_time_limit)s budget - $(round(remaining; digits=1))s left for the real solve")
+    end
     JuMP.unset_silent(m)
     return !isnothing(snapshot)
 end
