@@ -1,7 +1,7 @@
 """
 Creates an optimization model.
 """
-function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false, relax=false)
+function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_source=false, evergreen=true, use_direct_model=false, relax=false, tighten_bigM=true)
     check_model(supply_chain)
 
     times = 1:supply_chain.horizon
@@ -34,7 +34,11 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     # Never loosens the caller-supplied bigM - only tightens it when a
     # finite, positive structural bound is available - so this can't cut
     # off a feasible/optimal solution that the flat bigM would have allowed.
-    effective_bigM(bound) = (isfinite(bound) && bound > 0) ? min(bigM, bound) : bigM
+    # tighten_bigM=false reproduces the pre-tightening flat-bigM behavior
+    # exactly, so callers (see benchmark/run_benchmarks.jl) can A/B the
+    # tightening's effect within a single run instead of needing a separate
+    # checkout of an earlier commit.
+    effective_bigM(bound) = tighten_bigM && isfinite(bound) && bound > 0 ? min(bigM, bound) : bigM
 
     @variable(m, total_profits)
 

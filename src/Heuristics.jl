@@ -73,10 +73,10 @@ Returns `nothing` if the relaxed model itself doesn't solve to a usable solution
 (e.g. infeasible data) - the caller should just skip the warm start in that case
 rather than fail the whole optimize.
 """
-function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, time_limit, log=false)
+function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, tighten_bigM=true, time_limit, log=false)
     m = objective == :min_cost ?
-        create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true) :
-        create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true)
+        create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=true) :
+        create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=true)
     set_attribute(m, "log_to_console", false)
     # `used`/`serviced_by` stay binary even under relax=true (see create_network_model),
     # so this is still a MIP, just a smaller one - it needs its own time limit or it
@@ -131,9 +131,9 @@ derived from consecutive `opened` values (tightly forced by the real model's own
 constraints, so deriving them is exact, not a guess). Returns `true` if a warm
 start was applied, `false` otherwise.
 """
-function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, log=false)
+function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, tighten_bigM=true, log=false)
     m = supply_chain.optimization_model
-    hints = _relaxed_solution_hints(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, time_limit=JuMP.time_limit_sec(m), log=log)
+    hints = _relaxed_solution_hints(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, time_limit=JuMP.time_limit_sec(m), log=log)
     isnothing(hints) && return false
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
@@ -265,11 +265,11 @@ no-op (default, unchanged behavior); `:warm_start` and `:relax_and_fix` prime
 `supply_chain.optimization_model` (already built, with the caller's attributes
 already set) with a start value before the caller's normal `JuMP.optimize!` runs.
 """
-function apply_heuristic!(supply_chain, heuristic::Symbol, objective::Symbol, optimizer; single_source, evergreen, use_direct_model, bigM, window_size, log=false)
+function apply_heuristic!(supply_chain, heuristic::Symbol, objective::Symbol, optimizer; single_source, evergreen, use_direct_model, bigM, tighten_bigM=true, window_size, log=false)
     if heuristic == :none
         return false
     elseif heuristic == :warm_start
-        return warm_start_from_relaxation!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, log=log)
+        return warm_start_from_relaxation!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, log=log)
     elseif heuristic == :relax_and_fix
         return solve_relax_and_fix!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, window_size=window_size, log=log)
     else

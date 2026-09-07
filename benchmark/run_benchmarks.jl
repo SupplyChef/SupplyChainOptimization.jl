@@ -1,12 +1,16 @@
 # Manual benchmark harness - NOT part of `Pkg.test()` (deliberately slow).
 # Run with: `julia --project=. benchmark/run_benchmarks.jl`
 #
-# Compares, at a fixed time limit, the model's default behavior (which always
-# includes the tightened bigM from src/Optimization.jl - that change isn't
-# behind a flag, since it's provably never worse) against the two opt-in
-# heuristics (:warm_start, :relax_and_fix) and a raised mip_heuristic_effort,
-# on synthetic instances sized to actually leave a gap at the time limit (see
+# Compares, at a fixed time limit: the tightened-bigM formulation switched
+# off (tighten_bigM=false, i.e. the flat bigM=1_000_000 behavior from before
+# this branch - see src/Optimization.jl's effective_bigM) against baseline
+# (tightening on, the new default) and the two opt-in heuristics
+# (:warm_start, :relax_and_fix) plus a raised mip_heuristic_effort, on
+# synthetic instances sized to actually leave a gap at the time limit (see
 # generate_instance.jl for why test/UFLlib.jl's instances can't show this).
+# tighten_bigM=false makes the no_tightening/baseline pair a same-run,
+# same-instance A/B test of the big-M tightening's isolated effect, instead
+# of needing a separate checkout of an earlier commit.
 #
 # Records gap-at-timeout, wall time, and the best objective found for each
 # config, and prints a markdown table. Extend INSTANCES/CONFIGS below to add
@@ -29,6 +33,7 @@ const INSTANCES = [
 ]
 
 const CONFIGS = [
+    ("no_tightening", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, tighten_bigM=false)),
     ("baseline", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT)),
     ("warm_start", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:warm_start, log=true)),
     ("relax_and_fix", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:relax_and_fix, log=true)),
