@@ -95,7 +95,7 @@ function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; lo
     isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
     isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
     isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
-    apply_heuristic!(supply_chain, heuristic, :min_cost, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size)
+    apply_heuristic!(supply_chain, heuristic, :min_cost, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size, log=log)
     optimize_network_optimization_model!(supply_chain)
 end
 
@@ -118,7 +118,7 @@ function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer;
     isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
     isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
     isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
-    apply_heuristic!(supply_chain, heuristic, :max_profit, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size)
+    apply_heuristic!(supply_chain, heuristic, :max_profit, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, window_size=relax_and_fix_window_size, log=log)
     optimize_network_optimization_model!(supply_chain)
 end
 

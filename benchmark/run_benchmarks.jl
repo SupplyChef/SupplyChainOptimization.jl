@@ -30,8 +30,8 @@ const INSTANCES = [
 
 const CONFIGS = [
     ("baseline", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT)),
-    ("warm_start", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:warm_start)),
-    ("relax_and_fix", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:relax_and_fix)),
+    ("warm_start", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:warm_start, log=true)),
+    ("relax_and_fix", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:relax_and_fix, log=true)),
     ("heuristic_effort", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, mip_heuristic_effort=0.2)),
 ]
 

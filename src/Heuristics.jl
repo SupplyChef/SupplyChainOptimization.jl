@@ -10,7 +10,7 @@ Returns `nothing` if the relaxed model itself doesn't solve to a usable solution
 (e.g. infeasible data) - the caller should just skip the warm start in that case
 rather than fail the whole optimize.
 """
-function _relaxed_opened_values(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, time_limit)
+function _relaxed_opened_values(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, time_limit, log=false)
     m = objective == :min_cost ?
         create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true) :
         create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true)
@@ -19,8 +19,19 @@ function _relaxed_opened_values(supply_chain, objective::Symbol, optimizer, bigM
     # so this is still a MIP, just a smaller one - it needs its own time limit or it
     # could run as long as the real solve would have on a genuinely hard instance.
     isnothing(time_limit) || JuMP.set_time_limit_sec(m, time_limit)
+    if log
+        n_binary_relaxed = count(JuMP.is_binary, JuMP.all_variables(m))
+        n_binary_real = count(JuMP.is_binary, JuMP.all_variables(supply_chain.optimization_model))
+        println("[warm_start] relaxed model: $n_binary_relaxed binary vars (real model: $n_binary_real) - if these are close, relaxing opened/opening/closing isn't buying much")
+    end
+    start = time()
     JuMP.optimize!(m)
-    JuMP.has_values(m) || return nothing
+    elapsed = time() - start
+    if !JuMP.has_values(m)
+        log && println("[warm_start] relaxed solve found NO solution in $(round(elapsed; digits=1))s (status: $(JuMP.termination_status(m))) - skipping warm start")
+        return nothing
+    end
+    log && println("[warm_start] relaxed solve found objective $(JuMP.objective_value(m)) in $(round(elapsed; digits=1))s (status: $(JuMP.termination_status(m)))")
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
     return Dict((s, t) => round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)) for s in plants_storages, t in 1:supply_chain.horizon)
@@ -37,9 +48,9 @@ from consecutive `opened` values and given a start value too, since deriving the
 is essentially free and it further speeds up HiGHS locking in the facility
 lifecycle. Returns `true` if a warm start was applied, `false` otherwise.
 """
-function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false)
+function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, log=false)
     m = supply_chain.optimization_model
-    opened_val = _relaxed_opened_values(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, time_limit=JuMP.time_limit_sec(m))
+    opened_val = _relaxed_opened_values(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, time_limit=JuMP.time_limit_sec(m), log=log)
     isnothing(opened_val) && return false
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
@@ -87,7 +98,7 @@ Returns `true` if at least one window solved to a usable solution, `false` other
 (e.g. the very first window was infeasible) - the real model is left untouched in
 that case, so the caller's normal solve proceeds without a warm start.
 """
-function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, window_size=3, time_limit_per_window=nothing)
+function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, window_size=3, time_limit_per_window=nothing, log=false)
     m = supply_chain.optimization_model
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
     horizon = supply_chain.horizon
@@ -97,6 +108,7 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
     per_window = something(time_limit_per_window, isnothing(original_time_limit) ? nothing : original_time_limit / (n_windows + 1))
     isnothing(per_window) || JuMP.set_time_limit_sec(m, per_window)
     JuMP.set_silent(m)
+    log && println("[relax_and_fix] $n_windows windows of size $window_size, $(isnothing(per_window) ? "no" : round(per_window; digits=1)) s/window budget")
 
     for s in plants_storages, t in 1:horizon
         JuMP.unset_binary(m[:opened][s, t])
@@ -117,8 +129,14 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
             JuMP.set_binary(m[:opened][s, t])
         end
 
+        wstart = time()
         JuMP.optimize!(m)
-        JuMP.has_values(m) || break
+        welapsed = time() - wstart
+        if !JuMP.has_values(m)
+            log && println("[relax_and_fix] window $window: NO solution in $(round(welapsed; digits=1))s (status: $(JuMP.termination_status(m))) - stopping, falling back to whatever was fixed so far")
+            break
+        end
+        log && println("[relax_and_fix] window $window: objective $(JuMP.objective_value(m)) in $(round(welapsed; digits=1))s (status: $(JuMP.termination_status(m)))")
 
         # Read every value first, then write (fix) - interleaving JuMP.value
         # reads with model-modifying calls in the same loop invalidates JuMP's
@@ -131,6 +149,7 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
         end
         window_start += window_size
     end
+    log && println("[relax_and_fix] ", isnothing(snapshot) ? "no window ever produced a usable solution - no warm start applied" : "warm start captured from the last successful window")
 
     for s in plants_storages, t in 1:horizon
         JuMP.is_fixed(m[:opened][s, t]) && JuMP.unfix(m[:opened][s, t])
@@ -153,13 +172,13 @@ no-op (default, unchanged behavior); `:warm_start` and `:relax_and_fix` prime
 `supply_chain.optimization_model` (already built, with the caller's attributes
 already set) with a start value before the caller's normal `JuMP.optimize!` runs.
 """
-function apply_heuristic!(supply_chain, heuristic::Symbol, objective::Symbol, optimizer; single_source, evergreen, use_direct_model, bigM, window_size)
+function apply_heuristic!(supply_chain, heuristic::Symbol, objective::Symbol, optimizer; single_source, evergreen, use_direct_model, bigM, window_size, log=false)
     if heuristic == :none
         return false
     elseif heuristic == :warm_start
-        return warm_start_from_relaxation!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model)
+        return warm_start_from_relaxation!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, log=log)
     elseif heuristic == :relax_and_fix
-        return solve_relax_and_fix!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, window_size=window_size)
+        return solve_relax_and_fix!(supply_chain, objective, optimizer; bigM=bigM, single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, window_size=window_size, log=log)
     else
         throw(ArgumentError("unknown heuristic $(repr(heuristic)) (expected :none, :warm_start, or :relax_and_fix)"))
     end
