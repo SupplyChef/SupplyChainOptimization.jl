@@ -17,16 +17,26 @@ using Random
 
 """
     generate_instance(; horizon, customer_count, storage_count, plant_count,
-                         storage_capacity, seed)
+                         storage_capacity, capacity_headroom, lane_fixed_cost_probability,
+                         service_level, seed)
 
 `supplier(s) -> plant(s) -> storage(s) -> customer(s)`, one product, multi-period.
 `plant_count` plants each produce the single product from a raw input bought from
 a dedicated supplier (so a BOM/production bigM site is exercised too). Every
-storage has finite `maximum_throughput` and every storage->customer lane has a
-`fixed_cost`, so both tightened bigM sites (see src/Optimization.jl) are active.
+storage has finite `maximum_throughput`, and each storage->customer lane
+independently gets a `fixed_cost` with probability `lane_fixed_cost_probability`
+(both drive the bigM-linked constraints tightened in src/Optimization.jl, when
+present).
+
+`capacity_headroom` (default 1.3, i.e. 30% margin) and `lane_fixed_cost_probability`
+(default 1.0, i.e. every lane costed) exist to let benchmark instances vary
+structurally, not just by scale - see benchmark/run_benchmarks.jl's INSTANCES for
+variants that isolate each axis (uncapacitated via a large/Inf headroom, sparse
+lane fixed costs, single-period, longer horizon).
 """
 function generate_instance(; horizon=12, customer_count=150, storage_count=30, plant_count=3,
-                              storage_capacity=nothing, seed=42)
+                              storage_capacity=nothing, capacity_headroom=1.3,
+                              lane_fixed_cost_probability=1.0, service_level=0.95, seed=42)
     rng = Random.MersenneTwister(seed)
     sc = SupplyChain(horizon)
 
@@ -37,12 +47,13 @@ function generate_instance(; horizon=12, customer_count=150, storage_count=30, p
     # storages (plant_count is fixed). A 150-customer/3-plant instance with
     # plant capacity hardcoded at storage_capacity*5=2000/plant (6000 total)
     # against ~7500 average total demand was structurally infeasible - HiGHS
-    # correctly reported INFEASIBLE, not a bug in the solver. 30% headroom
+    # correctly reported INFEASIBLE, not a bug in the solver. capacity_headroom
     # over worst-case per-customer demand (70, see below) keeps this feasible
-    # regardless of scale.
+    # regardless of scale; pass a large value (or Inf) for an effectively
+    # uncapacitated instance.
     max_demand_per_customer = 70.0
-    storage_capacity = something(storage_capacity, max_demand_per_customer * customer_count * 1.3 / storage_count)
-    plant_capacity = max_demand_per_customer * customer_count * 1.3 / plant_count
+    storage_capacity = something(storage_capacity, max_demand_per_customer * customer_count * capacity_headroom / storage_count)
+    plant_capacity = max_demand_per_customer * customer_count * capacity_headroom / plant_count
 
     raw = add_product!(sc, Product("raw"))
     finished = add_product!(sc, Product("finished"))
@@ -74,9 +85,10 @@ function generate_instance(; horizon=12, customer_count=150, storage_count=30, p
     for i in 1:customer_count
         customer = add_customer!(sc, Customer("customer$i", Location(0, 0)))
         demand = [30.0 + 40.0 * rand(rng) for _ in 1:horizon]
-        add_demand!(sc, customer, finished, demand; service_level=0.95)
+        add_demand!(sc, customer, finished, demand; service_level=service_level)
         for storage in storages
-            add_lane!(sc, Lane(storage, customer; unit_cost=0.2 + 0.8 * rand(rng), fixed_cost=50.0))
+            fixed_cost = rand(rng) < lane_fixed_cost_probability ? 50.0 : 0.0
+            add_lane!(sc, Lane(storage, customer; unit_cost=0.2 + 0.8 * rand(rng), fixed_cost=fixed_cost))
         end
     end
 

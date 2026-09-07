@@ -13,9 +13,15 @@
 # of needing a separate checkout of an earlier commit.
 #
 # Records gap-at-timeout, wall time, and the best objective found for each
-# config, and prints a markdown table. Extend INSTANCES/CONFIGS below to add
-# more scale points or heuristic settings once real results suggest where to
-# push further.
+# config, and prints a markdown table. INSTANCES varies structure (capacity
+# pressure, lane fixed-cost density, single- vs multi-period, horizon length),
+# not just scale, so a difference in results is attributable to a specific
+# axis - see generate_instance.jl's docstring for what each kwarg controls.
+# Extend INSTANCES/CONFIGS below to add more axes or heuristic settings once
+# real results suggest where to push further.
+#
+# 6 instances x 5 configs at up to ~120-260s each - this takes a while,
+# budget well over half an hour for a full run.
 
 using SupplyChainOptimization
 using SupplyChainModeling
@@ -30,6 +36,13 @@ const TIME_LIMIT = 120.0
 const INSTANCES = [
     ("small", () -> generate_instance(; horizon=6, customer_count=40, storage_count=10, plant_count=2)),
     ("medium", () -> generate_instance(; horizon=12, customer_count=150, storage_count=30, plant_count=3)),
+    # Each variant below changes exactly one structural axis from "small",
+    # so a difference in results is attributable to that axis rather than a
+    # scale change. Same TIME_LIMIT/CONFIGS as small/medium for comparability.
+    ("small_uncapacitated", () -> generate_instance(; horizon=6, customer_count=40, storage_count=10, plant_count=2, capacity_headroom=100.0)),
+    ("small_sparse_fixed_cost", () -> generate_instance(; horizon=6, customer_count=40, storage_count=10, plant_count=2, lane_fixed_cost_probability=0.15)),
+    ("small_single_period", () -> generate_instance(; horizon=1, customer_count=40, storage_count=10, plant_count=2)),
+    ("medium_long_horizon", () -> generate_instance(; horizon=24, customer_count=150, storage_count=30, plant_count=3)),
 ]
 
 const CONFIGS = [
