@@ -1,16 +1,27 @@
 """
 Solves a relaxed variant of the network model (facility lifecycle binaries `opened`/
-`opening`/`closing` relaxed to `[0, 1]` continuous; `used`/`serviced_by` left binary)
-and returns rounded 0/1 values for every facility's `opened[s, t]`, keyed by `(s, t)`,
-usable as a warm start for the real MIP. `opening`/`closing` aren't returned - they're
-tightly forced by `opened[s, t-1]`/`opened[s, t]` in the real model's own constraints,
-so a start value for `opened` alone is enough for HiGHS to pick them up quickly.
+`opening`/`closing` relaxed to `[0, 1]` continuous; `used`/`serviced_by` left binary,
+since `relax=true` doesn't touch them - see `create_network_model`) and returns a
+NamedTuple of rounded 0/1 values usable as a **complete** warm start for the real
+MIP: `opened` (keyed `(s, t)`), `used` (keyed `(l, t)`, only for lanes with
+`minimum_quantity > 0 || fixed_cost > 0` - the same condition the variable itself is
+declared under), and `serviced_by` (keyed `(p, s, c, t)`, only when `single_source`).
+`opening`/`closing` aren't included - they're tightly forced by `opened[s, t-1]`/
+`opened[s, t]` in the real model's own constraints, so a start value for `opened`
+alone is enough for HiGHS to pick them up quickly.
+
+Capturing `used`/`serviced_by` too (not just `opened`) matters: leaving thousands of
+other binaries completely unset gives HiGHS only a *partial* MIP start, which it
+tries to complete via its own repair sub-MIP - and that repair can itself report
+infeasible and get discarded entirely on a large instance, silently throwing away
+the whole warm start rather than using it. Handing over a value for every discrete
+variable sidesteps that failure mode.
 
 Returns `nothing` if the relaxed model itself doesn't solve to a usable solution
 (e.g. infeasible data) - the caller should just skip the warm start in that case
 rather than fail the whole optimize.
 """
-function _relaxed_opened_values(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, time_limit, log=false)
+function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, time_limit, log=false)
     m = objective == :min_cost ?
         create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true) :
         create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, relax=true)
@@ -34,24 +45,42 @@ function _relaxed_opened_values(supply_chain, objective::Symbol, optimizer, bigM
     log && println("[warm_start] relaxed solve found objective $(JuMP.objective_value(m)) in $(round(elapsed; digits=1))s (status: $(JuMP.termination_status(m)))")
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
-    return Dict((s, t) => round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)) for s in plants_storages, t in 1:supply_chain.horizon)
+    horizon = supply_chain.horizon
+    opened = Dict((s, t) => round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)) for s in plants_storages, t in 1:horizon)
+
+    used = Dict{Tuple{Any,Int},Int}()
+    for l in supply_chain.lanes, t in 1:horizon
+        (l.minimum_quantity > 0 || l.fixed_cost > 0) || continue
+        used[(l, t)] = round(Int, clamp(JuMP.value(m[:used][l, t]), 0, 1))
+    end
+
+    serviced_by = nothing
+    if single_source
+        serviced_by = Dict((p, s, c, t) => round(Int, clamp(JuMP.value(m[:serviced_by][p, s, c, t]), 0, 1))
+                            for p in supply_chain.products, s in supply_chain.storages, c in supply_chain.customers, t in 1:horizon)
+    end
+
+    log && println("[warm_start] captured $(length(opened)) opened + $(length(used)) used" * (isnothing(serviced_by) ? "" : " + $(length(serviced_by)) serviced_by") * " values")
+
+    return (opened=opened, used=used, serviced_by=serviced_by)
 end
 
 """
     warm_start_from_relaxation!(supply_chain, objective, optimizer=HiGHS.Optimizer; bigM, single_source, evergreen, use_direct_model)
 
-Solves the model's LP-ish relaxation (see `_relaxed_opened_values`) and, if it
-produces a usable solution, sets it as the start value for `opened` on
-`supply_chain.optimization_model` (which must already be built - this only sets
-start values, it doesn't optimize the real model). `opening`/`closing` are derived
-from consecutive `opened` values and given a start value too, since deriving them
-is essentially free and it further speeds up HiGHS locking in the facility
-lifecycle. Returns `true` if a warm start was applied, `false` otherwise.
+Solves the model's LP-ish relaxation (see `_relaxed_solution_hints`) and, if it
+produces a usable solution, sets it as a **complete** discrete-variable start value
+on `supply_chain.optimization_model` (which must already be built - this only sets
+start values, it doesn't optimize the real model): `opened`, `used`, and (if
+`single_source`) `serviced_by` from the relaxed solve, plus `opening`/`closing`
+derived from consecutive `opened` values (tightly forced by the real model's own
+constraints, so deriving them is exact, not a guess). Returns `true` if a warm
+start was applied, `false` otherwise.
 """
 function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, log=false)
     m = supply_chain.optimization_model
-    opened_val = _relaxed_opened_values(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, time_limit=JuMP.time_limit_sec(m), log=log)
-    isnothing(opened_val) && return false
+    hints = _relaxed_solution_hints(supply_chain, objective, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, time_limit=JuMP.time_limit_sec(m), log=log)
+    isnothing(hints) && return false
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
     horizon = supply_chain.horizon
@@ -59,11 +88,21 @@ function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=
     for s in plants_storages
         prev = Int(s.initial_opened)
         for t in 1:horizon
-            cur = opened_val[(s, t)]
+            cur = hints.opened[(s, t)]
             JuMP.set_start_value(m[:opened][s, t], cur)
             JuMP.set_start_value(m[:opening][s, t], max(0, cur - prev))
             JuMP.set_start_value(m[:closing][s, t], max(0, prev - cur))
             prev = cur
+        end
+    end
+
+    for ((l, t), v) in hints.used
+        JuMP.set_start_value(m[:used][l, t], v)
+    end
+
+    if single_source && !isnothing(hints.serviced_by)
+        for ((p, s, c, t), v) in hints.serviced_by
+            JuMP.set_start_value(m[:serviced_by][p, s, c, t], v)
         end
     end
     return true
