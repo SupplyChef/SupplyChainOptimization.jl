@@ -1,4 +1,56 @@
 """
+Independently rounding each facility's fractional `opened[s, t]` value (as
+`_relaxed_solution_hints` does) can produce a facility-open pattern whose
+*aggregate* capacity, in some period, is no longer enough to cover the
+required demand fraction - even though the unrounded fractional relaxation
+was itself feasible. This is a well-known failure mode of naive LP-rounding
+for capacitated facility location (independent rounding doesn't preserve
+feasibility in general), and it's exactly what produced HiGHS's "Model
+status: Infeasible" when trying to complete an all-discrete-fixed warm
+start that hadn't been repaired.
+
+Mutates `opened` in place: for each period, if the total throughput
+capacity of facilities already rounded open falls short of a conservative
+per-period requirement (total demand across all customers/products in that
+period, times the *smallest* service_level among any (customer, product) -
+a deliberately loose, safe floor, since service_level is actually enforced
+as a horizon-total, not per-period, and this avoids needing to model that
+exactly here), opens additional facilities - highest-capacity first, since
+that closes the largest shortfall fastest - until the requirement is met or
+every facility is open. Never closes a facility the rounding already opened,
+so it only ever *relaxes* the `sum(sent) <= bigM * opened` constraints
+elsewhere in the model, never tightens them - the repair itself can't
+introduce new infeasibility.
+
+Returns the number of (facility, period) pairs it opened that rounding
+alone hadn't already opened, for diagnostics.
+"""
+function _repair_capacity!(opened, supply_chain, plants_storages, horizon)
+    products = supply_chain.products
+    customers = supply_chain.customers
+    isempty(products) && return 0
+
+    min_service_level = minimum(get_service_level(supply_chain, c, p) for c in customers, p in products; init=1.0)
+    capacity = Dict(s => sum(get_maximum_throughput(s, p) for p in products; init=0.0) for s in plants_storages)
+    by_capacity_desc = sort(plants_storages; by=s -> capacity[s], rev=true)
+
+    n_repaired = 0
+    for t in 1:horizon
+        required = min_service_level * sum(get_demand(supply_chain, c, p, t) for c in customers, p in products; init=0.0)
+        available = sum(capacity[s] for s in plants_storages if opened[(s, t)] == 1; init=0.0)
+        available >= required && continue
+        for s in by_capacity_desc
+            opened[(s, t)] == 1 && continue
+            opened[(s, t)] = 1
+            n_repaired += 1
+            available += capacity[s]
+            available >= required && break
+        end
+    end
+    return n_repaired
+end
+
+"""
 Solves a relaxed variant of the network model (facility lifecycle binaries `opened`/
 `opening`/`closing` relaxed to `[0, 1]` continuous; `used`/`serviced_by` left binary,
 since `relax=true` doesn't touch them - see `create_network_model`) and returns a
@@ -47,6 +99,8 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
     horizon = supply_chain.horizon
     opened = Dict((s, t) => round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)) for s in plants_storages, t in 1:horizon)
+    n_repaired = _repair_capacity!(opened, supply_chain, plants_storages, horizon)
+    log && n_repaired > 0 && println("[warm_start] repair opened $n_repaired additional (facility, period) pairs to restore aggregate capacity after independent rounding")
 
     used = Dict{Tuple{Any,Int},Int}()
     for l in supply_chain.lanes, t in 1:horizon
