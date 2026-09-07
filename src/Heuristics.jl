@@ -26,8 +26,15 @@ Returns the number of (facility, period) pairs it opened that rounding
 alone hadn't already opened, for diagnostics.
 """
 function _repair_capacity!(opened, supply_chain, plants_storages, horizon)
-    products = supply_chain.products
     customers = supply_chain.customers
+    horizon_range = 1:horizon
+    # Restricted to products actually demanded by someone - a product never
+    # added to a given facility (e.g. a raw material a storage never stocks)
+    # makes get_maximum_throughput default to Inf there, which would swamp
+    # any sum across *all* supply_chain.products and make every facility
+    # look uncapacitated regardless of its real (finite) capacity for the
+    # product that's actually being shipped to customers.
+    products = [p for p in supply_chain.products if any(get_demand(supply_chain, c, p, t) > 0 for c in customers, t in horizon_range)]
     isempty(products) && return 0
 
     min_service_level = minimum(get_service_level(supply_chain, c, p) for c in customers, p in products; init=1.0)
