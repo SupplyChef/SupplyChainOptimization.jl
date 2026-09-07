@@ -33,11 +33,11 @@ const INSTANCES = [
 ]
 
 const CONFIGS = [
-    ("no_tightening", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, tighten_bigM=false)),
-    ("baseline", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT)),
+    ("no_tightening", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, tighten_bigM=false, log=true)),
+    ("baseline", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, log=true)),
     ("warm_start", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:warm_start, log=true)),
     ("relax_and_fix", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, heuristic=:relax_and_fix, log=true)),
-    ("heuristic_effort", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, mip_heuristic_effort=0.2)),
+    ("heuristic_effort", sc -> SupplyChainOptimization.minimize_cost!(sc; time_limit=TIME_LIMIT, mip_heuristic_effort=0.2, log=true)),
 ]
 
 function relative_gap(model)
@@ -55,10 +55,26 @@ function run()
         for (cname, solve!) in CONFIGS
             sc = ibuilder()
             start = Dates.now()
-            solve!(sc)
-            elapsed = Dates.value(Dates.now() - start) / 1000.0
-            push!(rows, (instance=iname, config=cname, status=string(termination_status(sc.optimization_model)),
-                          gap=relative_gap(sc.optimization_model), objective=get_total_costs(sc), seconds=elapsed))
+            # One config erroring (e.g. termination_status/has_values never
+            # became true - no incumbent found in time, or a real
+            # infeasibility) shouldn't cost every other row in the run; a
+            # bad row and an explicit note about it is more useful here than
+            # losing an hour of solves to one failure.
+            try
+                solve!(sc)
+                elapsed = Dates.value(Dates.now() - start) / 1000.0
+                push!(rows, (instance=iname, config=cname, status=string(termination_status(sc.optimization_model)),
+                              gap=relative_gap(sc.optimization_model), objective=get_total_costs(sc), seconds=elapsed))
+            catch e
+                elapsed = Dates.value(Dates.now() - start) / 1000.0
+                status = try
+                    string(termination_status(sc.optimization_model))
+                catch
+                    "ERROR"
+                end
+                println("[$iname/$cname] failed after $(round(elapsed; digits=1))s (status: $status): $e")
+                push!(rows, (instance=iname, config=cname, status=status, gap=NaN, objective=NaN, seconds=elapsed))
+            end
         end
     end
 
@@ -66,7 +82,8 @@ function run()
     println("|---|---|---|---|---|---|")
     for r in rows
         gap_str = isnan(r.gap) ? "n/a" : string(round(100 * r.gap; digits=2), "%")
-        println("| $(r.instance) | $(r.config) | $(r.status) | $gap_str | $(round(r.objective; digits=1)) | $(round(r.seconds; digits=1)) |")
+        obj_str = isnan(r.objective) ? "n/a" : string(round(r.objective; digits=1))
+        println("| $(r.instance) | $(r.config) | $(r.status) | $gap_str | $obj_str | $(round(r.seconds; digits=1)) |")
     end
     return rows
 end
