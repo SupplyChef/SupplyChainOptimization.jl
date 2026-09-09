@@ -34,6 +34,24 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     _lanes_in(x) = get(_lanes_into, x, Lane[])
     _lanes_between(o, d) = [l for l in _lanes_out(o) if d in l.destinations]
 
+    # Same idea as the lane adjacency cache above, applied to the other calls that
+    # get repeated needlessly below: get_maximum_storage/get_maximum_throughput/
+    # get_additional_stock_cover/get_overflow_cost all take a (product, facility) pair
+    # but not `t`, yet several call sites live inside a [..., t=times] (or [t=times])
+    # constraint/variable and so were being recalled once per period - and
+    # get_maximum_storage in particular is computed independently at 3 separate call
+    # sites (the overflow variable's own condition, the storage-capacity constraint,
+    # and the overflow-cost sum) for the same (p, s). Computing each one once per
+    # (product, facility) up front turns every one of those into a Dict lookup.
+    _max_storage = Dict((p, s) => get_maximum_storage(s, p) for p in products, s in storages)
+    _max_throughput = Dict((p, x) => get_maximum_throughput(x, p) for p in products, x in Iterators.flatten((storages, suppliers, plants)))
+    _additional_stock_cover = Dict((p, s) => get_additional_stock_cover(s, p) for p in products, s in storages)
+    _overflow_cost = Dict((p, s) => get_overflow_cost(s, p) for p in products, s in storages if !isinf(_max_storage[(p, s)]))
+
+    # l.fixed_cost > 0 doesn't depend on t either, but was being tested against every
+    # lane on every one of the `times` iterations below instead of once overall.
+    _fixed_cost_lanes = [l for l in lanes if l.fixed_cost > 0]
+
     m = Model(optimizer)
     if use_direct_model
         m = direct_model(HiGHS.Optimizer())#; bridge_constraints = false)
@@ -110,7 +128,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     # Inventory beyond a storage's maximum_units: allowed (not infeasible), like lost_sales
     # for demand, but costed via overflow_unit_cost instead of bounded by a policy cap -
     # capacity is an economic tradeoff here, not a hard business promise.
-    @variable(m, overflow[p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))] >= 0)
+    @variable(m, overflow[p=products, s=storages, t=times; !isinf(_max_storage[(p, s)])] >= 0)
 
     if single_source
         if !relax
@@ -142,11 +160,11 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                                            if length(l.destinations) == 1 && isa(l.destinations[1], Customer))
     @constraint(m, [p=products, l=lanes, t=times; get(single_customer_lane_sent_time, (l, t), 0) > 0],
                     received[p, l, l.destinations[1], t] <= get_demand(supply_chain, l.destinations[1], p, t) * opened[l.origin, single_customer_lane_sent_time[(l, t)]])
-    @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in _lanes_out(s)) <= get_maximum_throughput(s, p) * opened[s, t])
+    @constraint(m, [p=products, s=storages, t=times; !isinf(_max_throughput[(p, s)])], sum(sent[p, l, t] for l in _lanes_out(s)) <= _max_throughput[(p, s)] * opened[s, t])
     @constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in _lanes_out(s)) <= s.maximum_overall_throughput * opened[s, t])
     @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in _lanes_in(s)) <= effective_bigM(min(total_demand_all_products, s.maximum_overall_throughput)) * opened[s, t])
 
-    @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))], stored_at_end[p, s, t] <= get_maximum_storage(s, p) * opened[s, t] + overflow[p, s, t])
+    @constraint(m, [p=products, s=storages, t=times; !isinf(_max_storage[(p, s)])], stored_at_end[p, s, t] <= _max_storage[(p, s)] * opened[s, t] + overflow[p, s, t])
 
     @constraint(m, [s=plants_storages; s.must_be_opened_at_end], opened[s, supply_chain.horizon] == 1)
     @constraint(m, [s=plants_storages; s.must_be_closed_at_end], opened[s, supply_chain.horizon] == 0)
@@ -175,21 +193,22 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                                                                             + sum(get_arrivals(p, l, s, t) for l in _lanes_in(s))
                                                                             - sum(sent[p, l, t] for l in _lanes_out(s))
                                                                             )
-    @constraint(m, [p=products, s=storages, t=times; get_additional_stock_cover(s, p) > 0], stored_at_end[p, s, t] >= get_additional_stock_cover(s, p) * sum(sent[p, l, t] for l in _lanes_out(s)))
+    @constraint(m, [p=products, s=storages, t=times; _additional_stock_cover[(p, s)] > 0], stored_at_end[p, s, t] >= _additional_stock_cover[(p, s)] * sum(sent[p, l, t] for l in _lanes_out(s)))
 
     @constraint(m, [p=products, s=suppliers, t=times], bought[p, s, t] == sum(sent[p, l, t] for l in _lanes_out(s)))
-    @constraint(m, [p=products, s=suppliers, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in _lanes_out(s)) <= get_maximum_throughput(s, p))
+    @constraint(m, [p=products, s=suppliers, t=times; !isinf(_max_throughput[(p, s)])], sum(sent[p, l, t] for l in _lanes_out(s)) <= _max_throughput[(p, s)])
 
     for s in plants, p in products
         if haskey(s.time, p)
-            @constraint(m, [t=times, ti=t:min(t+s.time[p], supply_chain.horizon)], produced[p, s, t] <= effective_bigM(min(total_demand[p], get_maximum_throughput(s, p))) * opened[s, ti])
+            bigM_p_s = effective_bigM(min(total_demand[p], _max_throughput[(p, s)]))
+            @constraint(m, [t=times, ti=t:min(t+s.time[p], supply_chain.horizon)], produced[p, s, t] <= bigM_p_s * opened[s, ti])
         else
             @constraint(m, sum(produced[p, s, :]) == 0)
             @constraint(m, sum(sum(sent[p, l, :]) for l in _lanes_out(s)) == 0)
         end
     end
     @constraint(m, [p=products, s=plants, t=times; haskey(s.time, p) && (t + s.time[p] <= supply_chain.horizon)], produced[p, s, t] == sum(sent[p, l, t + s.time[p]] for l in _lanes_out(s)))
-    @constraint(m, [p=products, s=plants, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in _lanes_out(s)) <= get_maximum_throughput(s, p))
+    @constraint(m, [p=products, s=plants, t=times; !isinf(_max_throughput[(p, s)])], sum(sent[p, l, t] for l in _lanes_out(s)) <= _max_throughput[(p, s)])
     @constraint(m, [p=products, s=plants; !has_bom(s, p)], sum(produced[p, s, :]) == 0)
     @constraint(m, [p=products, s=plants, t=times], sum(produced[p2, s, t] * get_bom(s, p2, p) for p2 in products if has_bom(s, p2, p); init=0.0) == sum(received[p, l, s, t] for l in _lanes_in(s)))
 
@@ -206,7 +225,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [t=times], total_holding_costs_per_period[t] == sum(stored_at_end[p, s, t] * get(s.unit_holding_cost, p, 0.0) for p in products, s in storages))
     @constraint(m, total_holding_costs == sum(total_holding_costs_per_period[t] for t in times))
 
-    @constraint(m, [t=times], total_overflow_costs_per_period[t] == sum(overflow[p, s, t] * get_overflow_cost(s, p) for p in products, s in storages if !isinf(get_maximum_storage(s, p)); init=0.0))
+    @constraint(m, [t=times], total_overflow_costs_per_period[t] == sum(overflow[p, s, t] * _overflow_cost[(p, s)] for p in products, s in storages if !isinf(_max_storage[(p, s)]); init=0.0))
     @constraint(m, total_overflow_costs == sum(total_overflow_costs_per_period[t] for t in times))
 
     @constraint(m, [t=times], total_buying_costs_per_period[t] == sum(bought[p, s, t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p); init=0.0))
@@ -220,7 +239,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        sum(sum(received[p, l, s, t] * s.unit_handling_cost[p] for l in _lanes_in(s)) for p in products for s in storages if haskey(s.unit_handling_cost, p)) +
                        total_buying_costs_per_period[t] +
                        sum(produced[p, s, t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p)) +
-                       sum(l.fixed_cost * used[l, t] for l in lanes if l.fixed_cost > 0) +
+                       sum(l.fixed_cost * used[l, t] for l in _fixed_cost_lanes) +
                        total_holding_costs_per_period[t] +
                        total_overflow_costs_per_period[t])
 
