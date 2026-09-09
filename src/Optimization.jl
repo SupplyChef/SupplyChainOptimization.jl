@@ -134,8 +134,14 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0], sum(sent[p, l, t] for p in products) >= l.minimum_quantity * used[l, t])
 
     @constraint(m, [s=storages, t=times], sum(sent[p, l, t] for p in products, l in _lanes_out(s)) <= effective_bigM(min(total_demand_all_products, s.maximum_overall_throughput)) * opened[s, t])
-    @constraint(m, [p=products, l=lanes, t=times; length(l.destinations) == 1 && isa(l.destinations[1], Customer) && get_sent_time(l, l.destinations[1], t) > 0],
-                    received[p, l, l.destinations[1], t] <= get_demand(supply_chain, l.destinations[1], p, t) * opened[l.origin, get_sent_time(l, l.destinations[1], t)])
+    # get_sent_time(l, l.destinations[1], t) depends only on (l, t), not p - precompute it
+    # once per (l, t) instead of recomputing it for every product in both the condition and
+    # the body below.
+    single_customer_lane_sent_time = Dict((l, t) => get_sent_time(l, l.destinations[1], t)
+                                           for l in lanes, t in times
+                                           if length(l.destinations) == 1 && isa(l.destinations[1], Customer))
+    @constraint(m, [p=products, l=lanes, t=times; get(single_customer_lane_sent_time, (l, t), 0) > 0],
+                    received[p, l, l.destinations[1], t] <= get_demand(supply_chain, l.destinations[1], p, t) * opened[l.origin, single_customer_lane_sent_time[(l, t)]])
     @constraint(m, [p=products, s=storages, t=times; !isinf(get_maximum_throughput(s, p))], sum(sent[p, l, t] for l in _lanes_out(s)) <= get_maximum_throughput(s, p) * opened[s, t])
     @constraint(m, [s=storages, t=times; !isinf(s.maximum_overall_throughput)], sum(sent[p, l, t] for p in products, l in _lanes_out(s)) <= s.maximum_overall_throughput * opened[s, t])
     @constraint(m, [s=storages, t=times], sum(received[p, l, s, t] for p in products, l in _lanes_in(s)) <= effective_bigM(min(total_demand_all_products, s.maximum_overall_throughput)) * opened[s, t])

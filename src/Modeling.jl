@@ -46,7 +46,7 @@ function get_additional_stock_cover(node, product)
 end
 
 function get_sent_time(lane, destination, receipt_time)
-    index = findfirst(d -> d == destination, lane.destinations)
+    index = findfirst(==(destination), lane.destinations)
     transit_time = lane.times[index]
     sent_time = receipt_time - transit_time
     return sent_time
