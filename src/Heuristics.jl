@@ -31,9 +31,10 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
     end
     log && println("[warm_start] relaxed solve found objective $(JuMP.objective_value(m)) in $(round(elapsed; digits=1))s (status: $(JuMP.termination_status(m)))")
 
-    plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
+    plants_storages_index = get_plant_storage_index(supply_chain)
+    plants_storages, psidx = plants_storages_index.items, plants_storages_index.index
     horizon = supply_chain.horizon
-    lp_opened = Dict((s, t) => clamp(JuMP.value(m[:opened][s, t]), 0.0, 1.0) for s in plants_storages, t in 1:horizon)
+    lp_opened = Dict((s, t) => clamp(JuMP.value(m[:opened][psidx[s], t]), 0.0, 1.0) for s in plants_storages, t in 1:horizon)
 
     status = Dict{Tuple{Any,Int},Symbol}()
     for s in plants_storages, t in 1:horizon
@@ -86,9 +87,9 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
     for s in plants_storages, t in 1:horizon
         st = status[(s, t)]
         if st == :open
-            JuMP.fix(m_sub[:opened][s, t], 1; force=true)
+            JuMP.fix(m_sub[:opened][psidx[s], t], 1; force=true)
         elseif st == :closed
-            JuMP.fix(m_sub[:opened][s, t], 0; force=true)
+            JuMP.fix(m_sub[:opened][psidx[s], t], 0; force=true)
         end
     end
 
@@ -104,8 +105,8 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
         log && println("[warm_start] sub-MIP with fixed closed facilities found NO solution in $(round(sub_elapsed; digits=1))s - running fallback with all facilities available")
         for s in plants_storages, t in 1:horizon
             if status[(s, t)] == :closed
-                JuMP.unfix(m_sub[:opened][s, t])
-                JuMP.set_binary(m_sub[:opened][s, t])
+                JuMP.unfix(m_sub[:opened][psidx[s], t])
+                JuMP.set_binary(m_sub[:opened][psidx[s], t])
             end
         end
         rem_time2 = isnothing(time_limit) ? nothing : max(1.0, time_limit - (elapsed + sub_elapsed))
@@ -160,12 +161,14 @@ function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=
             end
         end
     else
-        plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
+        plants_storages_index = get_plant_storage_index(supply_chain)
+        plants_storages, psidx = plants_storages_index.items, plants_storages_index.index
         horizon = supply_chain.horizon
         for s in plants_storages, t in 1:horizon
-            JuMP.set_start_value(m[:opened][s, t], JuMP.value(hints.sub_model[:opened][s, t]))
-            JuMP.set_start_value(m[:opening][s, t], JuMP.value(hints.sub_model[:opening][s, t]))
-            JuMP.set_start_value(m[:closing][s, t], JuMP.value(hints.sub_model[:closing][s, t]))
+            si = psidx[s]
+            JuMP.set_start_value(m[:opened][si, t], JuMP.value(hints.sub_model[:opened][si, t]))
+            JuMP.set_start_value(m[:opening][si, t], JuMP.value(hints.sub_model[:opening][si, t]))
+            JuMP.set_start_value(m[:closing][si, t], JuMP.value(hints.sub_model[:closing][si, t]))
         end
         for l in supply_chain.lanes, t in 1:horizon
             if (l.minimum_quantity > 0 || l.fixed_cost > 0) && haskey(hints.sub_model[:used], (l, t))
@@ -173,8 +176,12 @@ function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=
             end
         end
         if single_source
+            pidx = get_product_index(supply_chain).index
+            sidx = get_storage_index(supply_chain).index
+            cidx = get_customer_index(supply_chain).index
             for p in supply_chain.products, s in supply_chain.storages, c in supply_chain.customers, t in 1:horizon
-                JuMP.set_start_value(m[:serviced_by][p, s, c, t], JuMP.value(hints.sub_model[:serviced_by][p, s, c, t]))
+                pi_, si_, ci_ = pidx[p], sidx[s], cidx[c]
+                JuMP.set_start_value(m[:serviced_by][pi_, si_, ci_, t], JuMP.value(hints.sub_model[:serviced_by][pi_, si_, ci_, t]))
             end
         end
     end
@@ -213,7 +220,8 @@ that case, so the caller's normal solve proceeds without a warm start.
 """
 function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, window_size=3, time_limit_per_window=nothing, log=false)
     m = supply_chain.optimization_model
-    plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
+    plants_storages_index = get_plant_storage_index(supply_chain)
+    plants_storages, psidx = plants_storages_index.items, plants_storages_index.index
     horizon = supply_chain.horizon
     n_windows = cld(horizon, window_size)
 
@@ -224,9 +232,9 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
     log && println("[relax_and_fix] $n_windows windows of size $window_size, $(isnothing(per_window) ? "no" : round(per_window; digits=1)) s/window budget")
 
     for s in plants_storages, t in 1:horizon
-        JuMP.unset_binary(m[:opened][s, t])
-        JuMP.set_lower_bound(m[:opened][s, t], 0)
-        JuMP.set_upper_bound(m[:opened][s, t], 1)
+        JuMP.unset_binary(m[:opened][psidx[s], t])
+        JuMP.set_lower_bound(m[:opened][psidx[s], t], 0)
+        JuMP.set_upper_bound(m[:opened][psidx[s], t], 1)
     end
 
     # Captured after each successful window solve, overwritten every time - so
@@ -240,7 +248,7 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
     while window_start <= horizon
         window = window_start:min(window_start + window_size - 1, horizon)
         for s in plants_storages, t in window
-            JuMP.set_binary(m[:opened][s, t])
+            JuMP.set_binary(m[:opened][psidx[s], t])
         end
 
         wstart = time()
@@ -260,15 +268,15 @@ function solve_relax_and_fix!(supply_chain, objective::Symbol, optimizer=HiGHS.O
         # already-fully-populated snapshot instead of calling JuMP.value again.
         snapshot = Dict(v => JuMP.value(v) for v in JuMP.all_variables(m))
         for s in plants_storages, t in window
-            JuMP.fix(m[:opened][s, t], round(Int, clamp(snapshot[m[:opened][s, t]], 0, 1)); force=true)
+            JuMP.fix(m[:opened][psidx[s], t], round(Int, clamp(snapshot[m[:opened][psidx[s], t]], 0, 1)); force=true)
         end
         window_start += window_size
     end
     log && println("[relax_and_fix] ", isnothing(snapshot) ? "no window ever produced a usable solution - no warm start applied" : "warm start captured from the last successful window")
 
     for s in plants_storages, t in 1:horizon
-        JuMP.is_fixed(m[:opened][s, t]) && JuMP.unfix(m[:opened][s, t])
-        JuMP.is_binary(m[:opened][s, t]) || JuMP.set_binary(m[:opened][s, t])
+        JuMP.is_fixed(m[:opened][psidx[s], t]) && JuMP.unfix(m[:opened][psidx[s], t])
+        JuMP.is_binary(m[:opened][psidx[s], t]) || JuMP.set_binary(m[:opened][psidx[s], t])
     end
     if !isnothing(snapshot)
         for (v, val) in snapshot

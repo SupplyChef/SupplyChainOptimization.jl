@@ -216,6 +216,63 @@ function create_test_broken_model()
     return sc, product2, plant
 end
 
+"""
+    create_model_asymmetric_multi_facility()
+
+Two fully parallel supplier -> plant -> storage -> customer chains ("cheap":
+supplier1/plant1/storage1, "expensive": supplier2/plant2/storage2), each
+storage lane-connected to *both* customers, with the expensive chain costed
+(unit costs and fixed costs) well above the cheap one at every step. See
+test/Indexing.jl for why: create_network_model's variable containers are
+indexed by integer position (get_product_index/get_storage_index/
+get_plant_index/get_supplier_index/get_customer_index/get_lane_index/
+get_plant_storage_index - see that function's own comment), and every
+existing fixture before this one had only one plant/supplier, and
+cost-symmetric storages/customers - so a bug that mixed up which integer
+position belongs to which facility/product wouldn't necessarily change the
+computed optimum on any of them. Here it would: with distinct, asymmetric
+costs on every parallel facility, sourcing anything from the expensive chain
+changes the total away from the value asserted in the "Indexing" testset.
+"""
+function create_model_asymmetric_multi_facility()
+    sc = SupplyChain()
+
+    raw = add_product!(sc, Product("raw"))
+    finished = add_product!(sc, Product("finished"))
+
+    supplier1 = add_supplier!(sc, Supplier("supplier1", Seattle))
+    add_product!(supplier1, raw; unit_cost=1.0, maximum_throughput=Inf)
+    supplier2 = add_supplier!(sc, Supplier("supplier2", Seattle))
+    add_product!(supplier2, raw; unit_cost=100.0, maximum_throughput=Inf)
+
+    plant1 = add_plant!(sc, Plant("plant1", Seattle; fixed_cost=10.0, opening_cost=0.0, closing_cost=0.0, initial_opened=true))
+    add_product!(plant1, finished; bill_of_material=Dict(raw => 1.0), unit_cost=1.0, maximum_throughput=Inf)
+    plant2 = add_plant!(sc, Plant("plant2", Seattle; fixed_cost=1000.0, opening_cost=0.0, closing_cost=0.0, initial_opened=true))
+    add_product!(plant2, finished; bill_of_material=Dict(raw => 1.0), unit_cost=100.0, maximum_throughput=Inf)
+
+    storage1 = add_storage!(sc, Storage("storage1", Seattle; fixed_cost=10.0, opening_cost=0.0, closing_cost=0.0, initial_opened=true))
+    add_product!(storage1, finished; unit_holding_cost=0.0)
+    storage2 = add_storage!(sc, Storage("storage2", Seattle; fixed_cost=1000.0, opening_cost=0.0, closing_cost=0.0, initial_opened=true))
+    add_product!(storage2, finished; unit_holding_cost=0.0)
+
+    customer1 = add_customer!(sc, Customer("customer1", Seattle))
+    add_demand!(sc, customer1, finished, [50.0])
+    customer2 = add_customer!(sc, Customer("customer2", Seattle))
+    add_demand!(sc, customer2, finished, [50.0])
+
+    add_lane!(sc, Lane(supplier1, plant1; unit_cost=1.0))
+    add_lane!(sc, Lane(supplier2, plant2; unit_cost=100.0))
+    add_lane!(sc, Lane(plant1, storage1; unit_cost=1.0))
+    add_lane!(sc, Lane(plant2, storage2; unit_cost=100.0))
+    for storage in (storage1, storage2), customer in (customer1, customer2)
+        add_lane!(sc, Lane(storage, customer; unit_cost=1.0))
+    end
+
+    return (sc=sc, raw=raw, finished=finished, supplier1=supplier1, supplier2=supplier2,
+            plant1=plant1, plant2=plant2, storage1=storage1, storage2=storage2,
+            customer1=customer1, customer2=customer2)
+end
+
 function create_test_infeasible_model()
     #supplier -> plant -> storage -> customer
     sc = SupplyChain(2)

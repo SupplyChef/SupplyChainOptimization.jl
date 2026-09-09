@@ -47,7 +47,7 @@ Gets the amount of a given product produced at a given plant during a given peri
 """
 function get_production(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:produced][product, plant, period])
+    return value(supply_chain.optimization_model[:produced][get_product_index(supply_chain).index[product], get_plant_index(supply_chain).index[plant], period])
 end
 
 """
@@ -67,7 +67,9 @@ Gets the amount of a given product sent from a given storage location at a given
 """
 function get_shipments(supply_chain::SupplyChain, storage::Storage, product::Product, period=1)
     check(supply_chain)
-    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, storage); init=0.0)
+    product_i = get_product_index(supply_chain).index[product]
+    lane_index = get_lane_index(supply_chain).index
+    return sum(value(supply_chain.optimization_model[:sent][product_i, lane_index[l], period]) for l in get_lanes_out(supply_chain, storage); init=0.0)
 end
 
 """
@@ -77,7 +79,9 @@ Gets the amount of a given product sent from a given plant at a given period.
 """
 function get_shipments(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
     check(supply_chain)
-    return sum(value(supply_chain.optimization_model[:sent][product, l, period]) for l in get_lanes_out(supply_chain, plant); init=0.0)
+    product_i = get_product_index(supply_chain).index[product]
+    lane_index = get_lane_index(supply_chain).index
+    return sum(value(supply_chain.optimization_model[:sent][product_i, lane_index[l], period]) for l in get_lanes_out(supply_chain, plant); init=0.0)
 end
 
 """
@@ -87,7 +91,7 @@ Gets the amount of a given product shipped from a given supplier at a given peri
 """
 function get_shipments(supply_chain::SupplyChain, supplier::Supplier, product::Product, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:bought][product, supplier, period])
+    return value(supply_chain.optimization_model[:bought][get_product_index(supply_chain).index[product], get_supplier_index(supply_chain).index[supplier], period])
 end
 
 """
@@ -97,7 +101,7 @@ Gets the amount of a given product sent on a lane at a given period.
 """
 function get_shipments(supply_chain::SupplyChain, lane::Lane, product::Product, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:sent][product, lane, period])
+    return value(supply_chain.optimization_model[:sent][get_product_index(supply_chain).index[product], get_lane_index(supply_chain).index[lane], period])
 end
 
 """
@@ -131,7 +135,7 @@ Gets whether a given storage location is opened during a given period.
 """
 function is_opened(supply_chain::SupplyChain, storage::Storage, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:opened][storage, period]) ≈ 1.0
+    return value(supply_chain.optimization_model[:opened][get_plant_storage_index(supply_chain).index[storage], period]) ≈ 1.0
 end
 
 """
@@ -141,7 +145,7 @@ Gets whether a given plant is opened during a given period.
 """
 function is_opened(supply_chain::SupplyChain, plant::Plant, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:opened][plant, period]) ≈ 1.0
+    return value(supply_chain.optimization_model[:opened][get_plant_storage_index(supply_chain).index[plant], period]) ≈ 1.0
 end
 
 """
@@ -149,7 +153,7 @@ Gets whether a given storage location is opening during a given period.
 """
 function is_opening(supply_chain::SupplyChain, storage::Storage, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:opening][storage, period]) ≈ 1.0
+    return value(supply_chain.optimization_model[:opening][get_plant_storage_index(supply_chain).index[storage], period]) ≈ 1.0
 end
 
 """
@@ -157,7 +161,7 @@ Gets whether a given storage location is closing during a given period.
 """
 function is_closing(supply_chain::SupplyChain, storage::Storage, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:closing][storage, period]) ≈ 1.0
+    return value(supply_chain.optimization_model[:closing][get_plant_storage_index(supply_chain).index[storage], period]) ≈ 1.0
 end
 
 """
@@ -209,6 +213,7 @@ and Visualization.jl for why the split exists.)
 function get_financials(supply_chain; max_time=supply_chain.horizon)
     profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]
     cum_profits = cumsum(profits, dims=1)
+    psidx = get_plant_storage_index(supply_chain).index
 
     DataFrame((Horizon = 1:max_time,
                Profits = profits,
@@ -218,7 +223,7 @@ function get_financials(supply_chain; max_time=supply_chain.horizon)
                Transportation_Costs = collect(value.(supply_chain.optimization_model[:total_transportation_costs_per_period]))[1:max_time],
                Holding_Costs = collect(value.(supply_chain.optimization_model[:total_holding_costs_per_period]))[1:max_time],
                Buying_Costs = collect(value.(supply_chain.optimization_model[:total_buying_costs_per_period]))[1:max_time],
-               Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][w,t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
+               Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][psidx[w],t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
                Opening_Costs = collect(value.(supply_chain.optimization_model[:total_opening_costs_per_period]))[1:max_time],
                Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time]))
 end
