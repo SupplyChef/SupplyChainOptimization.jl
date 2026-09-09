@@ -99,7 +99,11 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
 
     @variable(m, stored_at_end[products, storages, 0:supply_chain.horizon] >= 0)
 
-    @variable(m, used[l=lanes, times; l.minimum_quantity > 0 || l.fixed_cost > 0], Bin)
+    if !relax
+        @variable(m, used[l=lanes, times; l.minimum_quantity > 0 || l.fixed_cost > 0], Bin)
+    else
+        @variable(m, 0 <= used[l=lanes, times; l.minimum_quantity > 0 || l.fixed_cost > 0] <= 1)
+    end
     @variable(m, sent[products, lanes, times] >= 0)
     @variable(m, received[products, l=lanes, d=l.destinations, times] >= 0)
 
@@ -109,7 +113,11 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, overflow[p=products, s=storages, t=times; !isinf(get_maximum_storage(s, p))] >= 0)
 
     if single_source
-        @variable(m, serviced_by[products, storages, customers, times], Bin)
+        if !relax
+            @variable(m, serviced_by[products, storages, customers, times], Bin)
+        else
+            @variable(m, 0 <= serviced_by[products, storages, customers, times] <= 1)
+        end
         @constraint(m, [p=products, c=customers, t=times], sum(serviced_by[p, s, c, t] for s in storages) <= 1)
         @constraint(m, [p=products, s=storages, c=customers, t=times], sum(received[p, l, c, t] for l in _lanes_between(s, c)) <= effective_bigM(get_demand(supply_chain, c, p, t)) * serviced_by[p, s, c, t])
     end

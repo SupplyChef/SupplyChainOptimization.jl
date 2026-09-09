@@ -58,41 +58,28 @@ function _repair_capacity!(opened, supply_chain, plants_storages, horizon)
 end
 
 """
-Solves a relaxed variant of the network model (facility lifecycle binaries `opened`/
-`opening`/`closing` relaxed to `[0, 1]` continuous; `used`/`serviced_by` left binary,
-since `relax=true` doesn't touch them - see `create_network_model`) and returns a
-NamedTuple of rounded 0/1 values usable as a **complete** warm start for the real
-MIP: `opened` (keyed `(s, t)`), `used` (keyed `(l, t)`, only for lanes with
-`minimum_quantity > 0 || fixed_cost > 0` - the same condition the variable itself is
-declared under), and `serviced_by` (keyed `(p, s, c, t)`, only when `single_source`).
-`opening`/`closing` aren't included - they're tightly forced by `opened[s, t-1]`/
-`opened[s, t]` in the real model's own constraints, so a start value for `opened`
-alone is enough for HiGHS to pick them up quickly.
+Solves a full linear relaxation of the network model (all binary variables relaxed
+to `[0, 1]` continuous) and partitions facility decisions:
+- Definite Open (`x >= 0.8`): fixed open (1)
+- Definite Closed (`x <= 0.05`): fixed closed (0)
+- Undecided (`0.05 < x < 0.8`): left as binary variables in the sub-MIP.
 
-Capturing `used`/`serviced_by` too (not just `opened`) matters: leaving thousands of
-other binaries completely unset gives HiGHS only a *partial* MIP start, which it
-tries to complete via its own repair sub-MIP - and that repair can itself report
-infeasible and get discarded entirely on a large instance, silently throwing away
-the whole warm start rather than using it. Handing over a value for every discrete
-variable sidesteps that failure mode.
+Then solves a fast sub-MIP with undecided facilities left binary, allowing the solver
+to optimize fixed costs versus flow costs without over-opening warehouses.
 
-Returns `nothing` if the relaxed model itself doesn't solve to a usable solution
-(e.g. infeasible data) - the caller should just skip the warm start in that case
-rather than fail the whole optimize.
+Returns `(sub_model=m_sub, status=status)` if successful, or `nothing` if no
+usable solution was found.
 """
 function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, bigM; single_source, evergreen, use_direct_model, tighten_bigM=true, time_limit, log=false)
     m = objective == :min_cost ?
         create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=true) :
         create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=true)
     set_attribute(m, "log_to_console", false)
-    # `used`/`serviced_by` stay binary even under relax=true (see create_network_model),
-    # so this is still a MIP, just a smaller one - it needs its own time limit or it
-    # could run as long as the real solve would have on a genuinely hard instance.
     isnothing(time_limit) || JuMP.set_time_limit_sec(m, time_limit)
     if log
         n_binary_relaxed = count(JuMP.is_binary, JuMP.all_variables(m))
         n_binary_real = count(JuMP.is_binary, JuMP.all_variables(supply_chain.optimization_model))
-        println("[warm_start] relaxed model: $n_binary_relaxed binary vars (real model: $n_binary_real) - if these are close, relaxing opened/opening/closing isn't buying much")
+        println("[warm_start] relaxed model: $n_binary_relaxed binary vars (real model: $n_binary_real)")
     end
     start = time()
     JuMP.optimize!(m)
@@ -105,48 +92,105 @@ function _relaxed_solution_hints(supply_chain, objective::Symbol, optimizer, big
 
     plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
     horizon = supply_chain.horizon
-    opened = Dict((s, t) => round(Int, clamp(JuMP.value(m[:opened][s, t]), 0, 1)) for s in plants_storages, t in 1:horizon)
-    n_repaired = _repair_capacity!(opened, supply_chain, plants_storages, horizon)
-    log && n_repaired > 0 && println("[warm_start] repair opened $n_repaired additional (facility, period) pairs to restore aggregate capacity after independent rounding")
+    lp_opened = Dict((s, t) => clamp(JuMP.value(m[:opened][s, t]), 0.0, 1.0) for s in plants_storages, t in 1:horizon)
 
-    used = Dict{Tuple{Any,Int},Int}()
-    for l in supply_chain.lanes, t in 1:horizon
-        (l.minimum_quantity > 0 || l.fixed_cost > 0) || continue
-        used[(l, t)] = round(Int, clamp(JuMP.value(m[:used][l, t]), 0, 1))
+    status = Dict{Tuple{Any,Int},Symbol}()
+    for s in plants_storages, t in 1:horizon
+        val = lp_opened[(s, t)]
+        if val >= 0.8
+            status[(s, t)] = :open
+        elseif val <= 0.05
+            status[(s, t)] = :closed
+        else
+            status[(s, t)] = :undecided
+        end
     end
 
-    serviced_by = nothing
-    if single_source
-        serviced_by = Dict((p, s, c, t) => round(Int, clamp(JuMP.value(m[:serviced_by][p, s, c, t]), 0, 1))
-                            for p in supply_chain.products, s in supply_chain.storages, c in supply_chain.customers, t in 1:horizon)
+    # Aggregate Capacity Safeguard: ensure open + undecided capacity covers period demand
+    customers = supply_chain.customers
+    horizon_range = 1:horizon
+    products = [p for p in supply_chain.products if any(get_demand(supply_chain, c, p, t) > 0 for c in customers, t in horizon_range)]
+    if !isempty(products)
+        min_service_level = minimum(get_service_level(supply_chain, c, p) for c in customers, p in products; init=1.0)
+        capacity = Dict(s => sum(get_maximum_throughput(s, p) for p in products; init=0.0) for s in plants_storages)
+        by_lp_desc = sort(plants_storages; by=s -> capacity[s], rev=true)
+
+        n_promoted = 0
+        for t in 1:horizon
+            required = min_service_level * sum(get_demand(supply_chain, c, p, t) for c in customers, p in products; init=0.0)
+            available = sum(capacity[s] for s in plants_storages if status[(s, t)] in (:open, :undecided); init=0.0)
+            available >= required && continue
+            for s in by_lp_desc
+                status[(s, t)] in (:open, :undecided) && continue
+                status[(s, t)] = :undecided
+                n_promoted += 1
+                available += capacity[s]
+                available >= required && break
+            end
+        end
+        log && n_promoted > 0 && println("[warm_start] capacity safeguard promoted $n_promoted closed facility-periods to candidate set")
     end
 
-    log && println("[warm_start] captured $(length(opened)) opened + $(length(used)) used" * (isnothing(serviced_by) ? "" : " + $(length(serviced_by)) serviced_by") * " values")
+    n_open = count(==(:open), values(status))
+    n_closed = count(==(:closed), values(status))
+    n_undecided = count(==(:undecided), values(status))
+    log && println("[warm_start] facility decisions: $n_open fixed open, $n_closed fixed closed, $n_undecided undecided (binary in sub-MIP)")
 
-    return (opened=opened, used=used, serviced_by=serviced_by)
+    # Polish step: construct and solve sub-MIP with undecided facilities left binary
+    m_sub = objective == :min_cost ?
+        create_network_cost_minimization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=false) :
+        create_network_profit_maximization_model(supply_chain, optimizer, bigM; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, tighten_bigM=tighten_bigM, relax=false)
+    set_attribute(m_sub, "log_to_console", false)
+
+    for s in plants_storages, t in 1:horizon
+        st = status[(s, t)]
+        if st == :open
+            JuMP.fix(m_sub[:opened][s, t], 1; force=true)
+        elseif st == :closed
+            JuMP.fix(m_sub[:opened][s, t], 0; force=true)
+        end
+    end
+
+    rem_time = isnothing(time_limit) ? nothing : max(1.0, time_limit - elapsed)
+    isnothing(rem_time) || JuMP.set_time_limit_sec(m_sub, rem_time)
+
+    sub_start = time()
+    JuMP.optimize!(m_sub)
+    sub_elapsed = time() - sub_start
+
+    # Fallback: if sub-MIP is infeasible, unfix closed facilities and retry
+    if !JuMP.has_values(m_sub)
+        log && println("[warm_start] sub-MIP with fixed closed facilities found NO solution in $(round(sub_elapsed; digits=1))s - running fallback with all facilities available")
+        for s in plants_storages, t in 1:horizon
+            if status[(s, t)] == :closed
+                JuMP.unfix(m_sub[:opened][s, t])
+                JuMP.set_binary(m_sub[:opened][s, t])
+            end
+        end
+        rem_time2 = isnothing(time_limit) ? nothing : max(1.0, time_limit - (elapsed + sub_elapsed))
+        isnothing(rem_time2) || JuMP.set_time_limit_sec(m_sub, rem_time2)
+        sub_start = time()
+        JuMP.optimize!(m_sub)
+        sub_elapsed += time() - sub_start
+    end
+
+    if !JuMP.has_values(m_sub)
+        log && println("[warm_start] sub-MIP polish found NO solution - skipping warm start")
+        return nothing
+    end
+
+    log && println("[warm_start] sub-MIP polish found feasible solution with objective $(JuMP.objective_value(m_sub)) in $(round(sub_elapsed; digits=1))s")
+
+    return (sub_model=m_sub, status=status)
 end
 
 """
     warm_start_from_relaxation!(supply_chain, objective, optimizer=HiGHS.Optimizer; bigM, single_source, evergreen, use_direct_model, relaxation_time_fraction=0.3)
 
-Solves the model's LP-ish relaxation (see `_relaxed_solution_hints`) and, if it
-produces a usable solution, sets it as a **complete** discrete-variable start value
-on `supply_chain.optimization_model` (which must already be built - this only sets
-start values, it doesn't optimize the real model): `opened`, `used`, and (if
-`single_source`) `serviced_by` from the relaxed solve, plus `opening`/`closing`
-derived from consecutive `opened` values (tightly forced by the real model's own
-constraints, so deriving them is exact, not a guess). Returns `true` if a warm
-start was applied, `false` otherwise.
-
-Stays within the caller's original `time_limit` as a *total* budget rather than
-handing the relaxed sub-solve a full share on top of it: the sub-solve is capped at
-`relaxation_time_fraction` (default 30%) of the original time limit, and
-`supply_chain.optimization_model`'s time limit is reduced by however long that
-sub-solve actually took before returning, so the caller's subsequent real solve
-gets only what's left - not a second full budget. Without this, a caller asking
-for `time_limit=120` could see this heuristic use up to ~240s of wall time (the
-relaxation's own 120s plus the real solve's untouched 120s), which silently breaks
-the `time_limit` contract every other code path here honors.
+Solves the LP relaxation and a fast polishing sub-MIP (see `_relaxed_solution_hints`)
+to produce a complete, guaranteed-feasible solution. Sets these values as warm start
+initial values on `supply_chain.optimization_model`. Returns `true` if a warm start
+was applied, `false` otherwise.
 """
 function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=HiGHS.Optimizer; bigM=1_000_000, single_source=false, evergreen=true, use_direct_model=false, tighten_bigM=true, relaxation_time_fraction=0.3, log=false)
     m = supply_chain.optimization_model
@@ -165,27 +209,32 @@ function warm_start_from_relaxation!(supply_chain, objective::Symbol, optimizer=
 
     isnothing(hints) && return false
 
-    plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
-    horizon = supply_chain.horizon
+    vars_sub = JuMP.all_variables(hints.sub_model)
+    vars_real = JuMP.all_variables(m)
 
-    for s in plants_storages
-        prev = Int(s.initial_opened)
-        for t in 1:horizon
-            cur = hints.opened[(s, t)]
-            JuMP.set_start_value(m[:opened][s, t], cur)
-            JuMP.set_start_value(m[:opening][s, t], max(0, cur - prev))
-            JuMP.set_start_value(m[:closing][s, t], max(0, prev - cur))
-            prev = cur
+    if length(vars_sub) == length(vars_real)
+        for (v_sub, v_real) in zip(vars_sub, vars_real)
+            if JuMP.has_values(hints.sub_model)
+                JuMP.set_start_value(v_real, JuMP.value(v_sub))
+            end
         end
-    end
-
-    for ((l, t), v) in hints.used
-        JuMP.set_start_value(m[:used][l, t], v)
-    end
-
-    if single_source && !isnothing(hints.serviced_by)
-        for ((p, s, c, t), v) in hints.serviced_by
-            JuMP.set_start_value(m[:serviced_by][p, s, c, t], v)
+    else
+        plants_storages = [x for x in union(supply_chain.plants, supply_chain.storages)]
+        horizon = supply_chain.horizon
+        for s in plants_storages, t in 1:horizon
+            JuMP.set_start_value(m[:opened][s, t], JuMP.value(hints.sub_model[:opened][s, t]))
+            JuMP.set_start_value(m[:opening][s, t], JuMP.value(hints.sub_model[:opening][s, t]))
+            JuMP.set_start_value(m[:closing][s, t], JuMP.value(hints.sub_model[:closing][s, t]))
+        end
+        for l in supply_chain.lanes, t in 1:horizon
+            if (l.minimum_quantity > 0 || l.fixed_cost > 0) && haskey(hints.sub_model[:used], (l, t))
+                JuMP.set_start_value(m[:used][l, t], JuMP.value(hints.sub_model[:used][l, t]))
+            end
+        end
+        if single_source
+            for p in supply_chain.products, s in supply_chain.storages, c in supply_chain.customers, t in 1:horizon
+                JuMP.set_start_value(m[:serviced_by][p, s, c, t], JuMP.value(hints.sub_model[:serviced_by][p, s, c, t]))
+            end
         end
     end
     return true
