@@ -75,7 +75,17 @@ end
 # stay consistent with each other.
 function _index_collection(items)
     v = collect(items)
-    return IndexedCollection(v, Dict(x => i for (i, x) in enumerate(v)))
+    # Dict{eltype(v),Int64}(...), not the untyped Dict(...): a plain Dict(...)
+    # comprehension infers its key type from the runtime values it actually
+    # sees, which can come out narrower than eltype(v) - e.g. get_plant_storage_index
+    # below on a supply_chain with storages but no plants yet: union(plants,
+    # storages) is a Set{Node} (Plant and Storage's common abstract supertype),
+    # so v::Vector{Node}, but a Dict(...) comprehension over only-Storage values
+    # would infer Dict{Storage,Int64} - mismatching IndexedCollection{T}'s single
+    # T between its Vector and its Dict. Forcing the Dict's key type from v itself
+    # keeps the two fields' T identical regardless of what's actually in items.
+    index = Dict{eltype(v),Int64}(x => i for (i, x) in enumerate(v))
+    return IndexedCollection(v, index)
 end
 
 get_customer_index(supply_chain) = _index_collection(supply_chain.customers)
