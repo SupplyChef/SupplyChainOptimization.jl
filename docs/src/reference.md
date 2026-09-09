@@ -5,6 +5,8 @@
 ```@docs
 minimize_cost!
 maximize_profits!
+warm_start_from_relaxation!
+solve_relax_and_fix!
 SupplyChainOptimization.create_network_cost_minimization_model
 SupplyChainOptimization.create_network_profit_maximization_model
 SupplyChainOptimization.create_network_cost_minimization_model!
