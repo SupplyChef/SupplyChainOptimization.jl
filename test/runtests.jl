@@ -21,6 +21,7 @@ include("Profits.jl")
 include("GSM.jl")
 include("Optimization.jl")
 include("Heuristics.jl")
+include("Indexing.jl")
 
 include("UnitTests.jl")
 
