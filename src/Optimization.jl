@@ -81,6 +81,27 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
 
     @constraint(m, [p=products, l=lanes, t=times], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[p, l, t])
 
+    # The constraint above only ties received[p, l, destination, t] to a
+    # real sent[] shipment for t reachable from an in-horizon departure
+    # (departure = t - l.times[i] >= 1, i.e. t > l.times[i] - see
+    # get_sent_time). For t <= l.times[i] there is no such departure - the
+    # horizon simply doesn't start early enough for any real shipment on
+    # this lane to have arrived yet - so without this constraint
+    # received[] for those periods is left as a free >= 0 variable, and
+    # the demand-balance constraint below (received + arrivals == demand -
+    # lost_sales) lets the solver set it to whatever demand requires, at
+    # zero transportation cost (that's computed from sent[], never
+    # received[]) and with nothing physically shipped. That silently
+    # defeats a customer's service_level whenever their fastest lane's
+    # lead time reaches into the start of the horizon - see the "Lost
+    # sales" testset below for the regression this guards. The only
+    # legitimate source for something arriving before any in-horizon
+    # shipment could reach it is a lane's declared initial_arrivals
+    # (get_arrivals - 0 when none is declared), so pin received[] to
+    # exactly that instead of leaving it free.
+    @constraint(m, [p=products, l=lanes, i=1:length(l.destinations), t=times; t <= l.times[i]],
+        received[p, l, l.destinations[i], t] == get_arrivals(p, l, l.destinations[i], t))
+
     @constraint(m, [l=lanes], sum(sent[p, l, t] for p in products, t in times if !can_ship(l, t)) == 0)
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0 || l.fixed_cost > 0], sum(sent[p, l, t] for p in products) <= bigM * used[l, t])
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0], sum(sent[p, l, t] for p in products) >= l.minimum_quantity * used[l, t])
