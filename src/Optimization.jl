@@ -88,6 +88,120 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     # lane on every one of the `times` iterations below instead of once overall.
     _fixed_cost_lanes = [l for l in lanes if l.fixed_cost > 0]
 
+    # Ad-valorem tariff cost per (product, lane, destination) for a lane leaving a
+    # Plant or Supplier directly: rate * declared value, a constant since it doesn't
+    # depend on any decision variable - so it folds into the objective the same way
+    # l.unit_cost does, no new variable needed. Declared value is the shipping node's
+    # own unit_cost for that product (production cost at a Plant, purchase cost at a
+    # Supplier) - the one case where "where did this unit come from" is known
+    # statically rather than needing the stored_by_origin overlay below (a Storage can
+    # blend units from several countries, a Plant/Supplier can't). Empty whenever the
+    # supply chain has no tariffs, so this never runs the O(products x lanes x
+    # destinations) loop below for callers not using tariffs.
+    _country(loc::Union{Location, Missing}) = ismissing(loc) ? nothing : loc.country
+    _country_of_node(node) = _country(node.location)
+    _tariff_unit_cost = Dict{Tuple{Product, Lane, ConcreteNode}, Float64}()
+    if !isempty(supply_chain.tariffs)
+        for l in lanes
+            if l.origin isa Plant || l.origin isa Supplier
+                origin_country = _country_of_node(l.origin)
+                if !isnothing(origin_country)
+                    for d in l.destinations
+                        destination_country = _country_of_node(d)
+                        isnothing(destination_country) && continue
+                        for p in products
+                            declared_value = get(l.origin.unit_cost, p, 0.0)
+                            declared_value <= 0.0 && continue
+                            rate = get_tariff_rate(supply_chain, origin_country, destination_country, p)
+                            rate <= 0.0 && continue
+                            _tariff_unit_cost[(p, l, d)] = rate * declared_value
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # Re-export tariffs: a Storage's inventory can blend units bought/produced in
+    # several countries, so a lane leaving a Storage can't be tariffed from a single
+    # static origin the way a Plant/Supplier-origin lane above can. Rather than
+    # replacing stored_at_end/sent/received with a (product, origin_country)-indexed
+    # version everywhere (which would ripple into Heuristics.jl/GSM.jl/Querying.jl/
+    # Visualization.jl and fragment their public (product, ...) API for every caller,
+    # tariffed or not), this adds a parallel "by origin" breakdown - stored_by_origin/
+    # sent_by_origin/received_by_origin below - that mirrors the existing storage
+    # balance/dispatch-split constraints one-for-one and ties back to the real
+    # variables with a sum-over-origins-equals-the-real-quantity constraint. The real
+    # variables and every constraint on them above are untouched; this whole block is
+    # only ever non-empty for products that actually have a tariff configured, so it's
+    # a no-op for every other product/caller.
+    #
+    # `nothing` is included as an origin_country: it's the "unknown provenance"
+    # bucket for initial_inventory, get_arrivals, and any Plant/Supplier without a
+    # country set - get_tariff_rate never charges a tariff against it (see its
+    # isnothing checks), so unknown-provenance inventory is simply never taxed on
+    # re-export rather than erroring or guessing.
+    #
+    # Declared value for a re-exported unit is the average unit_cost for that product
+    # across every Plant/Supplier in its origin country - the same idea as the
+    # Plant/Supplier-origin case above, but averaged since a country can have several
+    # sources at different costs and the cohort tracking below doesn't (yet) preserve
+    # which specific source a unit came from, only which country.
+    _tariff_relevant_products = if isempty(supply_chain.tariffs)
+        Product[]
+    elseif any(isnothing(t.product) for t in supply_chain.tariffs)
+        products
+    else
+        unique(Product[t.product for t in supply_chain.tariffs if !isnothing(t.product)])
+    end
+
+    _origin_countries = Union{Nothing, String}[nothing]
+    if !isempty(_tariff_relevant_products)
+        for x in Iterators.flatten((plants, suppliers))
+            oc = _country_of_node(x)
+            isnothing(oc) || push!(_origin_countries, oc)
+        end
+        unique!(_origin_countries)
+    end
+
+    _declared_value_by_origin = Dict{Tuple{Product, String}, Float64}()
+    if !isempty(_tariff_relevant_products)
+        for p in _tariff_relevant_products
+            by_country = Dict{String, Vector{Float64}}()
+            for x in Iterators.flatten((plants, suppliers))
+                oc = _country_of_node(x)
+                (isnothing(oc) || !haskey(x.unit_cost, p)) && continue
+                push!(get!(() -> Float64[], by_country, oc), x.unit_cost[p])
+            end
+            for (oc, source_values) in by_country
+                _declared_value_by_origin[(p, oc)] = sum(source_values) / length(source_values)
+            end
+        end
+    end
+
+    _cohort_tariff_unit_cost = Dict{Tuple{Product, Lane, ConcreteNode, String}, Float64}()
+    if !isempty(_tariff_relevant_products)
+        for l in lanes
+            if l.origin isa Storage
+                for d in l.destinations
+                    destination_country = _country_of_node(d)
+                    isnothing(destination_country) && continue
+                    for p in _tariff_relevant_products
+                        haskey(l.origin.unit_handling_cost, p) || continue
+                        for oc in _origin_countries
+                            isnothing(oc) && continue
+                            declared_value = get(_declared_value_by_origin, (p, oc), 0.0)
+                            declared_value <= 0.0 && continue
+                            rate = get_tariff_rate(supply_chain, oc, destination_country, p)
+                            rate <= 0.0 && continue
+                            _cohort_tariff_unit_cost[(p, l, d, oc)] = rate * declared_value
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     m = Model(optimizer)
     if use_direct_model
         m = direct_model(HiGHS.Optimizer())#; bridge_constraints = false)
@@ -134,6 +248,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, total_holding_costs_per_period[times] >= 0)
     @variable(m, total_overflow_costs >= 0)
     @variable(m, total_overflow_costs_per_period[times] >= 0)
+    @variable(m, total_tariff_costs >= 0)
+    @variable(m, total_tariff_costs_per_period[times] >= 0)
 
     if !relax
         @variable(m, opened[1:nps, times], Bin)
@@ -161,6 +277,13 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, sent[1:np, 1:nl, times] >= 0)
     @variable(m, received[products, l=lanes, d=l.destinations, times] >= 0)
 
+    # The "by origin" overlay described above stored_at_end/sent/received's
+    # declarations near the top of this function - only ever non-empty for
+    # products with a configured tariff (see _tariff_relevant_products).
+    @variable(m, stored_by_origin[p=_tariff_relevant_products, s=storages, oc=_origin_countries, t=0:supply_chain.horizon; haskey(s.unit_handling_cost, p)] >= 0)
+    @variable(m, sent_by_origin[p=_tariff_relevant_products, l=lanes, oc=_origin_countries, times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)] >= 0)
+    @variable(m, received_by_origin[p=_tariff_relevant_products, l=lanes, d=l.destinations, oc=_origin_countries, times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)] >= 0)
+
     # Inventory beyond a storage's maximum_units: allowed (not infeasible), like lost_sales
     # for demand, but costed via overflow_unit_cost instead of bounded by a policy cap -
     # capacity is an economic tradeoff here, not a hard business promise.
@@ -181,7 +304,24 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
         @constraint(m, [p=products, s=storages; !haskey(s.initial_inventory, p)], stored_at_end[p, s, 0] <= stored_at_end[p, s, supply_chain.horizon])
     end
 
+    # Cohort mirror of the two constraints just above: initial inventory has no known
+    # origin, so it all starts in the `nothing` ("unknown") bucket.
+    @constraint(m, [p=_tariff_relevant_products, s=storages; haskey(s.unit_handling_cost, p) && haskey(s.initial_inventory, p)], stored_by_origin[p, s, nothing, 0] == s.initial_inventory[p])
+    @constraint(m, [p=_tariff_relevant_products, s=storages, oc=_origin_countries; haskey(s.unit_handling_cost, p) && haskey(s.initial_inventory, p) && !isnothing(oc)], stored_by_origin[p, s, oc, 0] == 0.0)
+    if evergreen
+        @constraint(m, [p=_tariff_relevant_products, s=storages, oc=_origin_countries; haskey(s.unit_handling_cost, p) && !haskey(s.initial_inventory, p)], stored_by_origin[p, s, oc, 0] <= stored_by_origin[p, s, oc, supply_chain.horizon])
+    end
+
     @constraint(m, [p=products, l=lanes, t=times], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[pidx[p], lidx[l], t])
+
+    # Cohort mirror of the dispatch/arrival split just above, restricted to lanes
+    # leaving a Storage (the only origin type that needs a per-origin breakdown -
+    # see _tariff_unit_cost/_cohort_tariff_unit_cost above for why Plant/Supplier
+    # origins don't).
+    @constraint(m, [p=_tariff_relevant_products, l=lanes, oc=_origin_countries, t=times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)],
+                    sum(received_by_origin[p, l, l.destinations[i], oc, t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent_by_origin[p, l, oc, t])
+    @constraint(m, [p=_tariff_relevant_products, l=lanes, t=times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)],
+                    sum(sent_by_origin[p, l, oc, t] for oc in _origin_countries) == sent[pidx[p], lidx[l], t])
 
     @constraint(m, [l=lanes], sum(sent[pidx[p], lidx[l], t] for p in products, t in times if !can_ship(l, t)) == 0)
     @constraint(m, [l=lanes, t=times; l.minimum_quantity > 0 || l.fixed_cost > 0], sum(sent[pidx[p], lidx[l], t] for p in products) <= effective_bigM(total_demand_all_products) * used[l, t])
@@ -231,6 +371,30 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                                                                             )
     @constraint(m, [p=products, s=storages, t=times; _additional_stock_cover[(p, s)] > 0], stored_at_end[p, s, t] >= _additional_stock_cover[(p, s)] * sum(sent[pidx[p], lidx[l], t] for l in _lanes_out(s)))
 
+    # Cohort mirror of the storage balance just above: same inflows/outflows, split
+    # by origin_country instead of summed. A Plant/Supplier inflow is attributed
+    # entirely to that node's own (static) country - only a Storage inflow needs the
+    # received_by_origin variable, since only a Storage can blend more than one
+    # origin together. Anything else - get_arrivals (no origin data), and, in
+    # principle, a lane whose origin is neither a Plant/Supplier nor a Storage (e.g. a
+    # Customer, which ConcreteNode allows even though no fixture creates one) - is
+    # attributed to the `nothing` ("unknown") bucket, same as initial_inventory above,
+    # so this constraint always ties to the real balance exactly regardless of what's
+    # in the network.
+    @constraint(m, [p=_tariff_relevant_products, s=storages, oc=_origin_countries, t=times; haskey(s.unit_handling_cost, p)],
+                    stored_by_origin[p, s, oc, t] == stored_by_origin[p, s, oc, t-1]
+                                                    + sum(received[p, l, s, t] for l in _lanes_in(s) if (l.origin isa Plant || l.origin isa Supplier) && _country_of_node(l.origin) == oc)
+                                                    + sum(received_by_origin[p, l, s, oc, t] for l in _lanes_in(s) if l.origin isa Storage && haskey(l.origin.unit_handling_cost, p))
+                                                    + (isnothing(oc) ? sum(received[p, l, s, t] for l in _lanes_in(s) if !(l.origin isa Plant || l.origin isa Supplier || l.origin isa Storage)) : 0.0)
+                                                    + (isnothing(oc) ? sum(get_arrivals(p, l, s, t) for l in _lanes_in(s)) : 0.0)
+                                                    - sum(sent_by_origin[p, l, oc, t] for l in _lanes_out(s))
+                                                    )
+    # Ties the cohort breakdown back to the real stored_at_end - the whole point of
+    # the overlay: stored_by_origin can never drift from the actual inventory it's
+    # tracking the composition of.
+    @constraint(m, [p=_tariff_relevant_products, s=storages, t=0:supply_chain.horizon; haskey(s.unit_handling_cost, p)],
+                    sum(stored_by_origin[p, s, oc, t] for oc in _origin_countries) == stored_at_end[p, s, t])
+
     @constraint(m, [p=products, s=suppliers, t=times], bought[pidx[p], supidx[s], t] == sum(sent[pidx[p], lidx[l], t] for l in _lanes_out(s)))
     @constraint(m, [p=products, s=suppliers, t=times; !isinf(_max_throughput[(p, s)])], sum(sent[pidx[p], lidx[l], t] for l in _lanes_out(s)) <= _max_throughput[(p, s)])
 
@@ -265,6 +429,13 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [t=times], total_overflow_costs_per_period[t] == sum(overflow[p, s, t] * _overflow_cost[(p, s)] for p in products, s in storages if !isinf(_max_storage[(p, s)]); init=0.0))
     @constraint(m, total_overflow_costs == sum(total_overflow_costs_per_period[t] for t in times))
 
+    # Summed directly over _tariff_unit_cost's (sparse) keys rather than over the full
+    # (products, lanes, destinations) cross product, same reasoning as
+    # total_overflow_costs_per_period above - most (p, l, d) triples have no tariff.
+    @constraint(m, [t=times], total_tariff_costs_per_period[t] == sum(received[p, l, d, t] * coef for ((p, l, d), coef) in _tariff_unit_cost; init=0.0)
+                                                                 + sum(received_by_origin[p, l, d, oc, t] * coef for ((p, l, d, oc), coef) in _cohort_tariff_unit_cost; init=0.0))
+    @constraint(m, total_tariff_costs == sum(total_tariff_costs_per_period[t] for t in times))
+
     @constraint(m, [t=times], total_buying_costs_per_period[t] == sum(bought[pidx[p], supidx[s], t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p); init=0.0))
     @constraint(m, [t=times], total_opening_costs_per_period[t] == sum(opening[psidx[s], t] * s.opening_cost for s in plants_storages if !isinf(s.opening_cost); init=0.0))
     @constraint(m, [t=times], total_closing_costs_per_period[t] == sum(closing[psidx[s], t] * s.closing_cost for s in plants_storages if !isinf(s.closing_cost); init=0.0))
@@ -278,7 +449,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        sum(produced[pidx[p], plidx[s], t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p)) +
                        sum(l.fixed_cost * used[l, t] for l in _fixed_cost_lanes) +
                        total_holding_costs_per_period[t] +
-                       total_overflow_costs_per_period[t])
+                       total_overflow_costs_per_period[t] +
+                       total_tariff_costs_per_period[t])
 
     @constraint(m, [t=times], total_revenues_per_period[t] == sum((get_sales_price(supply_chain, c, p, t) * (get_demand(supply_chain, c, p, t) - lost_sales[pidx[p], cidx[c], t])) for p in products for c in customers))
     @constraint(m, total_revenues == sum(supply_chain.discount_factor ^ (t-1) * total_revenues_per_period[t] for t in times))

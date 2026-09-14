@@ -41,6 +41,16 @@ function get_total_transportation_costs(supply_chain::SupplyChain)
 end
 
 """
+    get_total_tariff_costs(supply_chain::SupplyChain)
+
+Gets the total ad-valorem tariff costs of operating the supply chain.
+"""
+function get_total_tariff_costs(supply_chain::SupplyChain)
+    check(supply_chain)
+    return value(supply_chain.optimization_model[:total_tariff_costs])
+end
+
+"""
     get_production(supply_chain::SupplyChain, plant::Plant, product::Product, period=1)
 
 Gets the amount of a given product produced at a given plant during a given period.
@@ -223,6 +233,7 @@ function get_financials(supply_chain; max_time=supply_chain.horizon)
                Transportation_Costs = collect(value.(supply_chain.optimization_model[:total_transportation_costs_per_period]))[1:max_time],
                Holding_Costs = collect(value.(supply_chain.optimization_model[:total_holding_costs_per_period]))[1:max_time],
                Buying_Costs = collect(value.(supply_chain.optimization_model[:total_buying_costs_per_period]))[1:max_time],
+               Tariff_Costs = collect(value.(supply_chain.optimization_model[:total_tariff_costs_per_period]))[1:max_time],
                Warehouses_Fixed_Costs = [sum(value(supply_chain.optimization_model[:opened][psidx[w],t]) * w.fixed_cost for w in supply_chain.storages) for t in 1:max_time],
                Opening_Costs = collect(value.(supply_chain.optimization_model[:total_opening_costs_per_period]))[1:max_time],
                Closing_Costs = collect(value.(supply_chain.optimization_model[:total_closing_costs_per_period]))[1:max_time]))
