@@ -90,7 +90,7 @@ end
 @test begin
     # No countries assigned anywhere in the network: existing (pre-tariff) models
     # must solve identically to before this feature existed.
-    sc = create_model_supplier_storage_customer()
+    sc, _, _ = create_model_supplier_storage_customer()
     SupplyChainOptimization.minimize_cost!(sc)
     get_total_tariff_costs(sc) == 0.0 &&
         get_total_costs(sc) == 1000 + 500 + 200

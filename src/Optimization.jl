@@ -183,9 +183,18 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     if !isempty(_tariff_relevant_products)
         for l in lanes
             if l.origin isa Storage
+                # The storage's own country, not any cohort's tag: a lane whose
+                # destination is in the same country as the storage itself never
+                # crosses a border, so it's never tariffed regardless of what any
+                # cohort is tagged with. Without this, goods that already paid duty
+                # entering the storage's country (a Tariff registered for that
+                # entry leg) would pay it again on every purely domestic delivery
+                # out of that storage, since the cohort tag alone doesn't know the
+                # goods already cleared customs once.
+                storage_country = _country_of_node(l.origin)
                 for d in l.destinations
                     destination_country = _country_of_node(d)
-                    isnothing(destination_country) && continue
+                    (isnothing(destination_country) || destination_country == storage_country) && continue
                     for p in _tariff_relevant_products
                         haskey(l.origin.unit_handling_cost, p) || continue
                         for oc in _origin_countries
