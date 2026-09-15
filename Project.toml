@@ -32,7 +32,16 @@ StatsBase = "0.34"
 SupplyChainModeling = "0.2, 0.3, 0.4"
 julia = "1.10"
 
-# SupplyChainModeling is a normal registered dependency (General, v0.4.0+)
-# as of 2026-09-02 - no [sources] override needed. It briefly needed one
-# (the registry had drifted behind `main`) - see PLAN.md in ExcelAtRetail.jl
-# and this repo's git history around that date if that situation recurs.
+# The tariff support this repo's Optimization.jl now depends on (Tariff,
+# Location.country, get_tariff_rate, SupplyChain.tariffs) has merged to
+# SupplyChainModeling.jl's claude/inspiring-lamport-lc0zn3 branch (PR #13)
+# but isn't on `main` or registered yet, so point at that branch directly
+# rather than the registry - the registered 0.4.0 (and `main`, still at
+# 0.4.0) predates this and has no `tariffs` field, which is what broke CI
+# here. It still declares version 0.4.0, so the [compat] bound below needs
+# no change. Remove this section once SupplyChainModeling.jl's tariff PR
+# merges to main and a new version is registered - see this repo's git
+# history (e.g. "Fix CI: point SupplyChainModeling override at main, not a
+# moving feature branch") for the same situation recurring previously.
+[sources]
+SupplyChainModeling = {url = "https://github.com/SupplyChef/SupplyChainModeling.jl", rev = "claude/inspiring-lamport-lc0zn3"}
