@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.7.0"
+version = "0.7.1"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -23,7 +23,7 @@ SupplyChainOptimizationPlotsExt = ["PlotlyJS", "Plots"]
 [compat]
 Dates = "1.10"
 DataFrames = "1.6"
-HiGHS = "1.7"
+HiGHS = "1.21"
 JuMP = "1.16"
 PlotlyJS = "0.18"
 Plots = "1.40"
@@ -44,6 +44,27 @@ julia = "1.10"
 # cover) plus tariffs on top of it. See ExcelAtRetail.jl's PLAN.md for a
 # downstream consumer that depends on this distinction behaviorally, not
 # just cosmetically.
+#
+# CORRECTION (2026-09-17): the paragraph above is wrong about progress_callback
+# specifically - checked directly against this repo's actual git history and
+# source, not just the comment trail. PR #15's branch
+# (claude/excelretail-supply-chain-redesign-nd0shp) never actually merged to
+# `main` - it's still a separate, un-merged branch today, and `main` (and
+# this branch, built from `main` after PR #24) never had
+# `_register_progress_callback!`/the `progress_callback` kwarg at all. A
+# downstream consumer (ExcelAtRetail.jl's run_network_optimization)
+# unconditionally passes `progress_callback` to `maximize_profits!`/
+# `minimize_cost!` and got a hard `MethodError` every single call as a
+# result - not a "0.6.0 vs 0.7.0" versioning gap, a genuinely missing
+# feature. Bumped to 0.7.1 here: ported `_register_progress_callback!` and
+# the `progress_callback` kwarg from nd0shp's implementation (unchanged,
+# just relocated next to this branch's extra mip_rel_gap/heuristic kwargs)
+# rather than merging the two branches wholesale, since nd0shp predates
+# tariffs and its own solver-tuning kwargs. HiGHS compat bumped to "1.21"
+# to match - nd0shp's own [compat] comment already flagged
+# CallbackFunction/HighsCallbackDataOut (what this callback mechanism
+# needs) as only confirmed present from HiGHS.jl 1.21 on, and this branch's
+# previous "1.7" floor predates that.
 #
 # SupplyChainModeling compat widened to include 0.5 for the same reason
 # in that package: its own Tariff/Location.country support (and

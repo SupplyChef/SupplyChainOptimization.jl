@@ -23,6 +23,7 @@ include("GSM.jl")
 include("Optimization.jl")
 include("Heuristics.jl")
 include("Indexing.jl")
+include("ProgressCallback.jl")
 
 include("UnitTests.jl")
 
