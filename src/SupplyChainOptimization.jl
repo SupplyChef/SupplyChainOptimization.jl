@@ -87,8 +87,14 @@ same-named HiGHS options (see HiGHS's documentation) and are left at HiGHS's own
 defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05)
 trades B&B time for more time spent in HiGHS's primal heuristics - useful on
 instances where the default effort doesn't find good incumbents quickly.
+
+`progress_callback`, if given, is called periodically during the solve with
+`(node_count, primal_bound, dual_bound, gap, running_time)` - see
+`_register_progress_callback!`. Only fires for the default HiGHS optimizer,
+and only for a MIP (a pure LP solves in one step - there's no "progress" to
+report).
 """
-function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, tighten_bigM=true, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3)
+function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, tighten_bigM=true, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3, progress_callback=nothing)
     create_network_cost_minimization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, tighten_bigM=tighten_bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
@@ -96,6 +102,7 @@ function minimize_cost!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; lo
     isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
     isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
     isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
+    _register_progress_callback!(supply_chain.optimization_model, progress_callback)
     apply_heuristic!(supply_chain, heuristic, :min_cost, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, tighten_bigM=tighten_bigM, window_size=relax_and_fix_window_size, log=log)
     optimize_network_optimization_model!(supply_chain)
 end
@@ -110,8 +117,14 @@ same-named HiGHS options (see HiGHS's documentation) and are left at HiGHS's own
 defaults when not given. Raising `mip_heuristic_effort` (0-1, HiGHS default 0.05)
 trades B&B time for more time spent in HiGHS's primal heuristics - useful on
 instances where the default effort doesn't find good incumbents quickly.
+
+`progress_callback`, if given, is called periodically during the solve with
+`(node_count, primal_bound, dual_bound, gap, running_time)` - see
+`_register_progress_callback!`. Only fires for the default HiGHS optimizer,
+and only for a MIP (a pure LP solves in one step - there's no "progress" to
+report).
 """
-function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, tighten_bigM=true, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3)
+function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer; log=false, time_limit=3600.0, single_source=false, evergreen=true, use_direct_model=false, bigM=1_000_000, tighten_bigM=true, mip_rel_gap=nothing, mip_heuristic_effort=nothing, presolve=nothing, parallel=nothing, heuristic=:none, relax_and_fix_window_size=3, progress_callback=nothing)
     create_network_profit_maximization_model!(supply_chain, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, tighten_bigM=tighten_bigM)
     set_attribute(supply_chain.optimization_model, "time_limit", time_limit)
     set_attribute(supply_chain.optimization_model, "log_to_console", log)
@@ -119,8 +132,42 @@ function maximize_profits!(supply_chain::SupplyChain, optimizer=HiGHS.Optimizer;
     isnothing(mip_heuristic_effort) || set_attribute(supply_chain.optimization_model, "mip_heuristic_effort", mip_heuristic_effort)
     isnothing(presolve) || set_attribute(supply_chain.optimization_model, "presolve", presolve)
     isnothing(parallel) || set_attribute(supply_chain.optimization_model, "parallel", parallel)
+    _register_progress_callback!(supply_chain.optimization_model, progress_callback)
     apply_heuristic!(supply_chain, heuristic, :max_profit, optimizer; single_source=single_source, evergreen=evergreen, use_direct_model=use_direct_model, bigM=bigM, tighten_bigM=tighten_bigM, window_size=relax_and_fix_window_size, log=log)
     optimize_network_optimization_model!(supply_chain)
+end
+
+"""
+    _register_progress_callback!(model, progress_callback)
+
+Wires `progress_callback` up to HiGHS's `kHighsCallbackMipLogging` callback
+(fires at HiGHS's own internal logging cadence during branch & bound, not
+every node - cheap enough to leave on) via `HiGHS.CallbackFunction`. Does
+nothing if `progress_callback` is `nothing`, or if `model`'s solver isn't
+HiGHS (the callback mechanism used here - `MOI.set(model,
+HiGHS.CallbackFunction(), ...)` - is HiGHS-specific, not part of JuMP's
+solver-independent callback API).
+
+The HiGHS-facing callback never asks HiGHS to interrupt the solve (always
+returns `Cint(0)`) and never lets an exception from `progress_callback`
+escape back into HiGHS's C code (logged instead) - either would be
+unsafe/undefined behavior at that boundary, not just a normal Julia error.
+"""
+function _register_progress_callback!(model, progress_callback)
+    progress_callback === nothing && return nothing
+    JuMP.solver_name(model) == "HiGHS" || return nothing
+
+    function _highs_progress_callback(::Cint, ::Ptr{Cchar}, data_out::HiGHS.HighsCallbackDataOut)::Cint
+        try
+            progress_callback(data_out.mip_node_count, data_out.mip_primal_bound, data_out.mip_dual_bound, data_out.mip_gap, data_out.running_time)
+        catch e
+            @error "progress_callback threw - ignoring, the solve continues" exception = (e, catch_backtrace())
+        end
+        return Cint(0)
+    end
+
+    JuMP.set_optimizer_attribute(model, HiGHS.CallbackFunction([HiGHS.kHighsCallbackMipLogging]), _highs_progress_callback)
+    return nothing
 end
 
 """
