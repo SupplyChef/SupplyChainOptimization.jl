@@ -259,6 +259,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, total_overflow_costs_per_period[times] >= 0)
     @variable(m, total_tariff_costs >= 0)
     @variable(m, total_tariff_costs_per_period[times] >= 0)
+    @variable(m, total_lost_sales_costs >= 0)
+    @variable(m, total_lost_sales_costs_per_period[times] >= 0)
 
     if !relax
         @variable(m, opened[1:nps, times], Bin)
@@ -322,6 +324,27 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     end
 
     @constraint(m, [p=products, l=lanes, t=times], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[pidx[p], lidx[l], t])
+
+    # The constraint above only ties received[p, l, destination, t] to a
+    # real sent[] shipment for t reachable from an in-horizon departure
+    # (departure = t - l.times[i] >= 1, i.e. t > l.times[i] - see
+    # get_sent_time). For t <= l.times[i] there is no such departure - the
+    # horizon simply doesn't start early enough for any real shipment on
+    # this lane to have arrived yet - so without this constraint
+    # received[] for those periods is left as a free >= 0 variable, and
+    # the demand-balance constraint below (received + arrivals == demand -
+    # lost_sales) lets the solver set it to whatever demand requires, at
+    # zero transportation cost (that's computed from sent[], never
+    # received[]) and with nothing physically shipped. That silently
+    # defeats a customer's service_level whenever their fastest lane's
+    # lead time reaches into the start of the horizon - see the "Lost
+    # sales" testset below for the regression this guards. The only
+    # legitimate source for something arriving before any in-horizon
+    # shipment could reach it is a lane's declared initial_arrivals
+    # (get_arrivals - 0 when none is declared), so pin received[] to
+    # exactly that instead of leaving it free.
+    @constraint(m, [p=products, l=lanes, i=1:length(l.destinations), t=times; t <= l.times[i]],
+        received[p, l, l.destinations[i], t] == get_arrivals(p, l, l.destinations[i], t))
 
     # Cohort mirror of the dispatch/arrival split just above, restricted to lanes
     # leaving a Storage (the only origin type that needs a per-origin breakdown -
@@ -445,6 +468,9 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                                                                  + sum(received_by_origin[p, l, d, oc, t] * coef for ((p, l, d, oc), coef) in _cohort_tariff_unit_cost; init=0.0))
     @constraint(m, total_tariff_costs == sum(total_tariff_costs_per_period[t] for t in times))
 
+    @constraint(m, [t=times], total_lost_sales_costs_per_period[t] == sum(lost_sales[pidx[p], cidx[c], t] * get_lost_sales_cost(supply_chain, c, p) for p in products, c in customers))
+    @constraint(m, total_lost_sales_costs == sum(supply_chain.discount_factor ^ (t-1) * total_lost_sales_costs_per_period[t] for t in times))
+
     @constraint(m, [t=times], total_buying_costs_per_period[t] == sum(bought[pidx[p], supidx[s], t] * s.unit_cost[p] for p in products, s in suppliers if haskey(s.unit_cost, p); init=0.0))
     @constraint(m, [t=times], total_opening_costs_per_period[t] == sum(opening[psidx[s], t] * s.opening_cost for s in plants_storages if !isinf(s.opening_cost); init=0.0))
     @constraint(m, [t=times], total_closing_costs_per_period[t] == sum(closing[psidx[s], t] * s.closing_cost for s in plants_storages if !isinf(s.closing_cost); init=0.0))
@@ -459,7 +485,8 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        sum(l.fixed_cost * used[l, t] for l in _fixed_cost_lanes) +
                        total_holding_costs_per_period[t] +
                        total_overflow_costs_per_period[t] +
-                       total_tariff_costs_per_period[t])
+                       total_tariff_costs_per_period[t] +
+                       total_lost_sales_costs_per_period[t])
 
     @constraint(m, [t=times], total_revenues_per_period[t] == sum((get_sales_price(supply_chain, c, p, t) * (get_demand(supply_chain, c, p, t) - lost_sales[pidx[p], cidx[c], t])) for p in products for c in customers))
     @constraint(m, total_revenues == sum(supply_chain.discount_factor ^ (t-1) * total_revenues_per_period[t] for t in times))

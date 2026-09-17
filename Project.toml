@@ -1,7 +1,7 @@
 name = "SupplyChainOptimization"
 uuid = "785807e5-a5cf-4c87-8002-234621def379"
 authors = ["SupplyChef <47842426+SupplyChef@users.noreply.github.com>"]
-version = "0.7.1"
+version = "0.7.2"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -32,6 +32,26 @@ StatsBase = "0.34"
 SupplyChainModeling = "0.2, 0.3, 0.4, 0.5"
 julia = "1.10"
 
+# Bumped 0.7.1 -> 0.7.2 (2026-09-17): PR #17 (claude/excelretail-supply-chain-redesign-nd0shp,
+# the same branch progress_callback was ported from for 0.7.1) also carried
+# lost-sales-cost-as-an-objective-term plus get_lost_sales/Lost_Sales/
+# Lost_Sales_Cost visibility - genuinely never merged anywhere (checked
+# directly against `main`'s source, not the comment two paragraphs down that
+# claims this landed via "PR #15": that PR only merged the *earlier* nd0shp
+# commits - precompile fix, PlotlyJS weak deps - not this branch's later
+# work, which stayed open as PR #17 and went stale/conflicted once tariffs
+# landed on top of it). Ported the same way as 0.7.1: cherry-picked the
+# relevant nd0shp commits onto current `main` rather than merging PR #17
+# wholesale, re-indexing lost_sales/get_financials's new lost_sales lookups
+# through pidx/cidx (nd0shp predates the pidx/cidx integer-indexing
+# refactor tariffs brought in, so its own code indexed lost_sales by struct
+# directly - would've been a BoundsError against current `main`). Also
+# ported PR #17's received[] correctness fix (pins received[] to declared
+# arrivals before a lane's lead time can deliver - otherwise a customer's
+# service_level was silently defeated whenever their fastest lane's lead
+# time reached into period 1) since it shares the same "Lost sales" test
+# coverage and is a real bug independent of the visibility work.
+#
 # Bumped 0.5.0 -> 0.7.0 (2026-09-15): this repo's own Project.toml version
 # had drifted well behind what's actually on `main` - the branch that
 # added progress_callback + folded lost_sales_cost into the objective

@@ -146,3 +146,134 @@ end
         true
     end
 end
+
+@testset "Lost sales" begin
+    # Same shape as create_model_storage_customer(), but demand (100)
+    # outstrips the storage's initial_inventory (60) - a shortfall
+    # get_lost_sales/get_financials should report exactly, forced by
+    # the model's own balance constraint (received + arrivals ==
+    # demand - lost_sales), not a solver choice: with zero
+    # transportation/handling cost and a positive sales_price, shipping
+    # every available unit is strictly profit-improving, so all 60
+    # available units ship and the remaining 40 are lost sales -
+    # allowed here via service_level=0.0 (otherwise this would be
+    # infeasible instead, per the (1-service_level) cap in
+    # Optimization.jl).
+    sc = SupplyChain(1)
+
+    product = Product("p1")
+    add_product!(sc, product)
+
+    c = Customer("c1", Seattle)
+    add_customer!(sc, c)
+    add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
+
+    storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+    add_storage!(sc, storage)
+    add_product!(storage, product; initial_inventory=60.0)
+
+    add_lane!(sc, Lane(storage, c; unit_cost=0.0))
+
+    SupplyChainOptimization.maximize_profits!(sc)
+
+    financials = get_financials(sc)
+
+    # Individual @test calls (rather than one &&-chained boolean) so a
+    # failure prints which specific value was wrong, not just "false" -
+    # this whole testset never actually ran before get_lost_sales was
+    # exported (see the CI fix earlier in this PR's history), so these
+    # numbers were never confirmed against a real solve. Confirmed for
+    # real now: the shortfall IS exactly 40 units and Costs IS exactly
+    # the lost-sales penalty, as designed - but the LP solve returns
+    # values like 40.00000000000001, not clean integers, so this needs
+    # `≈` (isapprox), not `==`, to actually pass.
+    @test get_lost_sales(sc, c, product, 1) ≈ 40.0
+    @test financials.Lost_Sales[1] ≈ 40.0
+    @test financials.Lost_Sales_Cost[1] ≈ 120.0
+    # Every other cost in this scenario is zero (free storage, free lane,
+    # no holding cost) - so Costs is now exactly the lost sales penalty,
+    # confirming lost_sales_cost is folded into total_costs, not just
+    # reported alongside it.
+    @test financials.Costs[1] ≈ 120.0
+end
+
+@testset "Lost sales forced by a lane's lead time, not just by inventory" begin
+    # Same idea as the "Lost sales" testset above, but the shortfall is
+    # forced by the lane's own transit time instead of insufficient
+    # inventory: period-1 demand behind a lane with time=1 physically
+    # cannot be met (nothing departs before period 1, and it takes 1
+    # period to arrive - the earliest anything could arrive is period 2,
+    # which doesn't exist in a 1-period horizon), no matter how much
+    # inventory the storage holds or how profitable shipping would be.
+    #
+    # Regression test for the missing constraint on received[] added
+    # above: before it, received[p, lane, c, 1] was a free >= 0 variable
+    # for exactly this lane/period (get_sent_time(lane, c, 1) == 0, not
+    # > 0, so the demand-cap constraint a few lines up never applied to
+    # it either) - the solver could (and did) just set it to 100.0 to
+    # make the demand-balance constraint (received + arrivals == demand -
+    # lost_sales) come out even for free, reporting zero lost sales
+    # despite nothing being physically shippable that fast. With the new
+    # constraint pinning it to get_arrivals(...) (0 here - no
+    # initial_arrivals declared), the shortfall now has nowhere to hide.
+    sc = SupplyChain(1)
+
+    product = Product("p1")
+    add_product!(sc, product)
+
+    c = Customer("c1", Seattle)
+    add_customer!(sc, c)
+    add_demand!(sc, c, product, [100.0]; sales_price=10.0, lost_sales_cost=3.0, service_level=0.0)
+
+    storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+    add_storage!(sc, storage)
+    add_product!(storage, product; initial_inventory=1000.0) # plenty of stock - the lane's lead time is the only obstacle
+
+    add_lane!(sc, Lane(storage, c; unit_cost=0.0, time=1))
+
+    SupplyChainOptimization.maximize_profits!(sc)
+
+    financials = get_financials(sc)
+
+    @test get_lost_sales(sc, c, product, 1) ≈ 100.0
+    @test financials.Lost_Sales[1] ≈ 100.0
+    @test financials.Lost_Sales_Cost[1] ≈ 300.0
+end
+
+@testset "Lost sales cost influences the objective" begin
+    # Shipping alone loses money here (sales_price=10 < lane unit_cost=12), so
+    # with lost_sales_cost=0 the optimizer strictly prefers losing the sale
+    # (costs nothing) over shipping (costs $2/unit net). Raising
+    # lost_sales_cost above that $2 margin loss flips the trade-off - not
+    # shipping now costs more than shipping's own loss - so the optimizer
+    # switches to serving the customer in full. This is a solver choice
+    # (unlike the "Lost sales" testset above, where the shortfall is forced
+    # by inventory), so it only demonstrates the fix if the choice actually
+    # changes with lost_sales_cost.
+    function build_margin_scenario(lost_sales_cost)
+        sc = SupplyChain(1)
+        product = Product("p1")
+        add_product!(sc, product)
+        c = Customer("c1", Seattle)
+        add_customer!(sc, c)
+        add_demand!(sc, c, product, [50.0]; sales_price=10.0, lost_sales_cost=lost_sales_cost, service_level=0.0)
+        storage = Storage("s1", Seattle; fixed_cost=0.0, initial_opened=true)
+        add_storage!(sc, storage)
+        add_product!(storage, product; initial_inventory=100.0)
+        add_lane!(sc, Lane(storage, c; unit_cost=12.0))
+        return sc, c, product
+    end
+
+    sc_no_penalty, c_no_penalty, product_no_penalty = build_margin_scenario(0.0)
+    SupplyChainOptimization.maximize_profits!(sc_no_penalty)
+    @test get_lost_sales(sc_no_penalty, c_no_penalty, product_no_penalty, 1) ≈ 50.0
+
+    sc_penalty, c_penalty, product_penalty = build_margin_scenario(5.0)
+    SupplyChainOptimization.maximize_profits!(sc_penalty)
+    # atol, not just the default rtol: isapprox's relative tolerance is
+    # meaningless against an expected value of exactly 0 (rtol * 0 == 0,
+    # so isapprox(1e-13, 0.0) is false without an explicit atol) - the same
+    # LP floating-point noise as above (~1e-13), just with nothing to take
+    # a ratio against.
+    @test get_lost_sales(sc_penalty, c_penalty, product_penalty, 1) ≈ 0.0 atol=1e-6
+end
