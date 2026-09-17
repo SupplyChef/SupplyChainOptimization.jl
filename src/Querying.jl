@@ -148,7 +148,11 @@ associated `lost_sales_cost` in dollar terms.
 """
 function get_lost_sales(supply_chain::SupplyChain, customer::Customer, product::Product, period=1)
     check(supply_chain)
-    return value(supply_chain.optimization_model[:lost_sales][product, customer, period])
+    # lost_sales is declared over 1:np, 1:nc (plain integer ranges, not the
+    # struct collections themselves - see create_network_model's comment on
+    # why) - translate through get_product_index/get_customer_index like
+    # get_production does for the same reason.
+    return value(supply_chain.optimization_model[:lost_sales][get_product_index(supply_chain).index[product], get_customer_index(supply_chain).index[customer], period])
 end
 
 """
@@ -244,9 +248,13 @@ function get_financials(supply_chain; max_time=supply_chain.horizon)
     profits = collect(value.(supply_chain.optimization_model[:total_revenues_per_period]))[1:max_time].-collect(value.(supply_chain.optimization_model[:total_costs_per_period]))[1:max_time]
     cum_profits = cumsum(profits, dims=1)
     psidx = get_plant_storage_index(supply_chain).index
+    # lost_sales is declared over 1:np, 1:nc (see get_lost_sales's own comment) -
+    # translate through pidx/cidx like the rest of this function does via psidx.
+    pidx = get_product_index(supply_chain).index
+    cidx = get_customer_index(supply_chain).index
 
-    lost_sales_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][p, c, t]) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
-    lost_sales_cost_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][p, c, t]) * get_lost_sales_cost(supply_chain, c, p) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
+    lost_sales_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][pidx[p], cidx[c], t]) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
+    lost_sales_cost_by_period(t) = sum(value(supply_chain.optimization_model[:lost_sales][pidx[p], cidx[c], t]) * get_lost_sales_cost(supply_chain, c, p) for p in supply_chain.products for c in supply_chain.customers; init=0.0)
 
     DataFrame((Horizon = 1:max_time,
                Profits = profits,
