@@ -323,7 +323,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
         @constraint(m, [p=_tariff_relevant_products, s=storages, oc=_origin_countries; haskey(s.unit_handling_cost, p) && !haskey(s.initial_inventory, p)], stored_by_origin[p, s, oc, 0] <= stored_by_origin[p, s, oc, supply_chain.horizon])
     end
 
-    @constraint(m, [p=products, l=lanes, t=times], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[pidx[p], lidx[l], t])
+    @constraint(m, [p=products, l=lanes, t=times; !_has_realized_lead_times(l)], sum(received[p, l, l.destinations[i], t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent[pidx[p], lidx[l], t])
 
     # The constraint above only ties received[p, l, destination, t] to a
     # real sent[] shipment for t reachable from an in-horizon departure
@@ -343,15 +343,69 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     # shipment could reach it is a lane's declared initial_arrivals
     # (get_arrivals - 0 when none is declared), so pin received[] to
     # exactly that instead of leaving it free.
-    @constraint(m, [p=products, l=lanes, i=1:length(l.destinations), t=times; t <= l.times[i]],
+    @constraint(m, [p=products, l=lanes, i=1:length(l.destinations), t=times; t <= l.times[i] && !_has_realized_lead_times(l)],
         received[p, l, l.destinations[i], t] == get_arrivals(p, l, l.destinations[i], t))
+
+    # Lanes with realized lead times (see Lane.lead_times): the arrival period
+    # depends on the departure period, so shipments can overtake each other and
+    # several departures can arrive in the same period. The constraints above,
+    # which tie each departure to one fixed arrival period, become: what is
+    # received in a period is what was sent in every departure period that
+    # arrives then, and a period no departure reaches is pinned to the lane's
+    # declared arrivals, as above. A departure that would arrive after the
+    # horizon cannot ship. Single-destination lanes only: a split across
+    # destinations would need a flow variable per destination.
+    for l in lanes
+        _has_realized_lead_times(l) || continue
+        if length(l.destinations) != 1
+            throw(ArgumentError("lead_times on lane $l, which has several destinations, are not supported by the optimizer"))
+        end
+        destination = l.destinations[1]
+        departures_arriving = Dict{Int, Vector{Int}}()
+        for t in times
+            arrival = _arrival_period(l, 1, t)
+            if arrival <= supply_chain.horizon
+                push!(get!(departures_arriving, arrival, Int[]), t)
+            else
+                for p in products
+                    @constraint(m, sent[pidx[p], lidx[l], t] == 0)
+                end
+            end
+        end
+        for p in products, a in times
+            if haskey(departures_arriving, a)
+                @constraint(m, received[p, l, destination, a] == sum(sent[pidx[p], lidx[l], t] for t in departures_arriving[a]))
+            else
+                @constraint(m, received[p, l, destination, a] == get_arrivals(p, l, destination, a))
+            end
+        end
+    end
 
     # Cohort mirror of the dispatch/arrival split just above, restricted to lanes
     # leaving a Storage (the only origin type that needs a per-origin breakdown -
     # see _tariff_unit_cost/_cohort_tariff_unit_cost above for why Plant/Supplier
     # origins don't).
-    @constraint(m, [p=_tariff_relevant_products, l=lanes, oc=_origin_countries, t=times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)],
+    @constraint(m, [p=_tariff_relevant_products, l=lanes, oc=_origin_countries, t=times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p) && !_has_realized_lead_times(l)],
                     sum(received_by_origin[p, l, l.destinations[i], oc, t + l.times[i]] for i in 1:length(l.destinations) if t + l.times[i] <= supply_chain.horizon) == sent_by_origin[p, l, oc, t])
+    # The same for lanes with realized lead times (see above).
+    for l in lanes
+        _has_realized_lead_times(l) && l.origin isa Storage || continue
+        for p in _tariff_relevant_products, oc in _origin_countries
+            haskey(l.origin.unit_handling_cost, p) || continue
+            departures_arriving = Dict{Int, Vector{Int}}()
+            for t in times
+                arrival = _arrival_period(l, 1, t)
+                if arrival <= supply_chain.horizon
+                    push!(get!(departures_arriving, arrival, Int[]), t)
+                else
+                    @constraint(m, sent_by_origin[p, l, oc, t] == 0)
+                end
+            end
+            for (a, departures) in departures_arriving
+                @constraint(m, received_by_origin[p, l, l.destinations[1], oc, a] == sum(sent_by_origin[p, l, oc, t] for t in departures))
+            end
+        end
+    end
     @constraint(m, [p=_tariff_relevant_products, l=lanes, t=times; l.origin isa Storage && haskey(l.origin.unit_handling_cost, p)],
                     sum(sent_by_origin[p, l, oc, t] for oc in _origin_countries) == sent[pidx[p], lidx[l], t])
 

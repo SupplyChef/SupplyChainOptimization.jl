@@ -15,6 +15,7 @@ include("Models.jl")
 include("Docs.jl")
 
 include("Inventory.jl")
+include("LeadTimes.jl")
 
 include("UFLlib.jl")
 include("Profits.jl")
