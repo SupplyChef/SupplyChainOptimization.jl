@@ -41,6 +41,52 @@ function get_total_transportation_costs(supply_chain::SupplyChain)
 end
 
 """
+    get_total_capital_costs(supply_chain::SupplyChain)
+
+Gets the cost of capital of the solution: `cost_of_capital` times the money tied up, summed over periods, not
+discounted. (It is part of `total_costs`, where it is discounted like every other period cost.)
+"""
+function get_total_capital_costs(supply_chain::SupplyChain)
+    check(supply_chain)
+    return supply_chain.cost_of_capital * sum(max.(get_cumulative_net_cash_out(supply_chain), 0.0))
+end
+
+"""
+    get_cash_out(supply_chain::SupplyChain)::Vector{Float64}
+
+Gets the cash paid out in each period: purchases per the suppliers' `PaymentTerms`, production, freight and tariffs.
+"""
+function get_cash_out(supply_chain::SupplyChain)
+    check(supply_chain)
+    return collect(value.(supply_chain.optimization_model[:cash_out]))
+end
+
+"""
+    get_cash_in(supply_chain::SupplyChain)::Vector{Float64}
+
+Gets the cash received in each period: sales.
+"""
+function get_cash_in(supply_chain::SupplyChain)
+    check(supply_chain)
+    return collect(value.(supply_chain.optimization_model[:cash_in]))
+end
+
+"""
+    get_cumulative_net_cash_out(supply_chain::SupplyChain)::Vector{Float64}
+
+Gets the cumulative net cash out at the end of each period: everything paid out so far minus everything received.
+"""
+get_cumulative_net_cash_out(supply_chain::SupplyChain) = cumsum(get_cash_out(supply_chain) .- get_cash_in(supply_chain))
+
+"""
+    get_peak_cash_outlay(supply_chain::SupplyChain)
+
+Gets the highest cumulative net cash out reached in any period of the solution, and 0 if it never exceeds 0.
+If the supply chain has a `cash_budget`, this is at most that.
+"""
+get_peak_cash_outlay(supply_chain::SupplyChain) = max(0.0, maximum(get_cumulative_net_cash_out(supply_chain)))
+
+"""
     get_total_tariff_costs(supply_chain::SupplyChain)
 
 Gets the total ad-valorem tariff costs of operating the supply chain.
