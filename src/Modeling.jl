@@ -52,6 +52,16 @@ function get_additional_stock_cover(node, product)
     end
 end
 
+# Whether the optimizer models `lane` with its realized lead times (see
+# Lane.lead_times) - the arrival period depends on the departure period -
+# rather than the fixed nominal `times`. Lanes into a Customer always use the
+# nominal time, as in the simulation, where nothing is shipped to customers.
+_has_realized_lead_times(lane) = !isnothing(lane.lead_times) && !any(d -> d isa Customer, lane.destinations)
+
+# The period a shipment on `lane` to its i-th destination arrives in, given the
+# period it departs in (the realized lead time when the lane has any).
+_arrival_period(lane, i, departure) = departure + (_has_realized_lead_times(lane) ? lane.lead_times[i][departure] : lane.times[i])
+
 function get_sent_time(lane, destination, receipt_time)
     index = findfirst(==(destination), lane.destinations)
     transit_time = lane.times[index]

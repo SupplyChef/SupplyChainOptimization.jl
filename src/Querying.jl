@@ -122,8 +122,12 @@ Gets the amount of a given product sent on a lane at a given period.
 function get_shipments(supply_chain::SupplyChain, lane::Lane, destination, product::Product, period=1)
     check(supply_chain)
     index = findfirst(d -> d == destination, lane.destinations)
-    if isnothing(index) || period + lane.times[index] > supply_chain.horizon
+    if isnothing(index) || _arrival_period(lane, index, period) > supply_chain.horizon
         return 0
+    end
+    if _has_realized_lead_times(lane)
+        # What arrives in a period may come from several departures, so read what this departure sent.
+        return value(supply_chain.optimization_model[:sent][get_product_index(supply_chain).index[product], get_lane_index(supply_chain).index[lane], period])
     end
     return value(supply_chain.optimization_model[:received][product, lane, destination, period + lane.times[index]])
 end
