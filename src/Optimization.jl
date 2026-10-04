@@ -262,6 +262,17 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @variable(m, total_lost_sales_costs >= 0)
     @variable(m, total_lost_sales_costs_per_period[times] >= 0)
 
+    # Cash (see the constraints further down): what is paid out and received in each period,
+    # the cumulative net cash out (free: negative once customers have paid more than has been spent),
+    # and the money tied up (net cash out, floored at 0), which is what the cost of capital is charged on.
+    # The peak is not a variable: nothing in the objective pushes it down, so it is read from net_cash_out
+    # after the solve (see get_peak_cash_outlay).
+    @variable(m, total_capital_costs_per_period[times] >= 0)
+    @variable(m, cash_out[times] >= 0)
+    @variable(m, cash_in[times] >= 0)
+    @variable(m, net_cash_out[times])
+    @variable(m, capital_employed[times] >= 0)
+
     if !relax
         @variable(m, opened[1:nps, times], Bin)
         @variable(m, opening[1:nps, times], Bin)
@@ -529,6 +540,41 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
     @constraint(m, [t=times], total_opening_costs_per_period[t] == sum(opening[psidx[s], t] * s.opening_cost for s in plants_storages if !isinf(s.opening_cost); init=0.0))
     @constraint(m, [t=times], total_closing_costs_per_period[t] == sum(closing[psidx[s], t] * s.closing_cost for s in plants_storages if !isinf(s.closing_cost); init=0.0))
 
+    # Cash. Same convention as SupplyChainSimulation's SimMetrics: purchases, freight and tariffs are
+    # cash out, sales are cash in; holding, overflow, lost-sales, plant fixed/opening/closing and
+    # handling costs are not cash.
+    #  - A Supplier is paid per its PaymentTerms: the deposit share when the units are bought
+    #    (bought[.., t] is what leaves the supplier in t), the balance `balance_offset` periods later.
+    #    The model has no lead time between ordering from a supplier and its shipment, so a balance
+    #    due before shipment falls in the period of the purchase, and one due after the horizon is
+    #    not part of the curve.
+    #  - A Plant is paid in full when it produces; freight and lane fixed costs when sent; tariffs when
+    #    received (as in total_tariff_costs_per_period); sales when demand is served.
+    _supplier_cash_coefficients = Tuple{Int64, Int64, Int64, Float64}[]  # (product, supplier, periods from purchase, per unit)
+    for s in suppliers, p in products
+        haskey(s.unit_cost, p) || continue
+        terms = get_payment_terms(s)
+        deposit = terms.deposit_share * s.unit_cost[p]
+        balance = (1.0 - terms.deposit_share) * s.unit_cost[p]
+        deposit > 0 && push!(_supplier_cash_coefficients, (pidx[p], supidx[s], 0, deposit))
+        balance > 0 && push!(_supplier_cash_coefficients, (pidx[p], supidx[s], max(terms.balance_offset, 0), balance))
+    end
+    @constraint(m, [t=times], cash_out[t] == sum(bought[pj, sj, t - lag] * coef for (pj, sj, lag, coef) in _supplier_cash_coefficients if t - lag >= 1; init=0.0) +
+                                              sum(produced[pidx[p], plidx[s], t] * s.unit_cost[p] for p in products, s in plants if haskey(s.unit_cost, p); init=0.0) +
+                                              total_transportation_costs_per_period[t] +
+                                              sum(l.fixed_cost * used[l, t] for l in _fixed_cost_lanes; init=0.0) +
+                                              total_tariff_costs_per_period[t])
+    @constraint(m, [t=times], cash_in[t] == total_revenues_per_period[t])
+    @constraint(m, [t=times], net_cash_out[t] == (t == 1 ? 0.0 : net_cash_out[t-1]) + cash_out[t] - cash_in[t])
+    @constraint(m, [t=times], capital_employed[t] >= net_cash_out[t])
+    # The budget is a hard limit on the cumulative net cash out; lost sales keep the model feasible by
+    # allowing it to buy less. (capital_employed only needs to hold from below: it is minimized through
+    # the cost of capital, and unused when that is 0.)
+    if isfinite(supply_chain.cash_budget)
+        @constraint(m, [t=times], net_cash_out[t] <= supply_chain.cash_budget)
+    end
+    @constraint(m, [t=times], total_capital_costs_per_period[t] == supply_chain.cost_of_capital * capital_employed[t])
+
     @constraint(m, [t=times], total_costs_per_period[t] == total_transportation_costs_per_period[t] +
                        total_fixed_costs_per_period[t] +
                        total_opening_costs_per_period[t] +
@@ -540,6 +586,7 @@ function create_network_model(supply_chain, optimizer, bigM=1_000_000; single_so
                        total_holding_costs_per_period[t] +
                        total_overflow_costs_per_period[t] +
                        total_tariff_costs_per_period[t] +
+                       total_capital_costs_per_period[t] +
                        total_lost_sales_costs_per_period[t])
 
     @constraint(m, [t=times], total_revenues_per_period[t] == sum((get_sales_price(supply_chain, c, p, t) * (get_demand(supply_chain, c, p, t) - lost_sales[pidx[p], cidx[c], t])) for p in products for c in customers))
